@@ -5,9 +5,12 @@
 
 # ★ ห้าม commit — ผลลัพธ์จาก probe_cameras.py มักมี user/password กล้องฝัง
 # อยู่ใน URL ที่ log ไว้ (เจอเคสจริงจากการสำรวจหน้าร้าน) เก็บไว้ดูเองได้
-# แต่ห้ามหลุดเข้า git
+# แต่ห้ามหลุดเข้า git — รวมทั้ง CSV ดิบและ HTML ที่ build_csv_html.py สร้างจาก
+# CSV นั้น (มีข้อมูลเดียวกันฝังอยู่ใน DATA={...} ในไฟล์)  ตัวสคริปต์เอง
+# (.py/.bat) ยัง track ปกติ ไม่ได้ยกเว้น
 scripts/*.csv
 scripts/result*.csv
+scripts/result*.html
 
 # ★ ห้าม commit — เป็นข้อมูลส่วนบุคคลตาม PDPA
 samples/
