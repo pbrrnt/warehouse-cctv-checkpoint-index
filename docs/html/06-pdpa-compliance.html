@@ -1,0 +1,656 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>06 — การปฏิบัติตาม PDPA — ระบบดัชนีสืบค้นภาพ</title>
+<style>
+:root {
+  --ground:#F5F4F2; --surface:#FFFFFF; --surface-2:#EEECE8;
+  --ink:#191714; --ink-2:#57524B; --ink-3:#8A837A;
+  --rule:#DEDAD4; --rule-strong:#C4BEB5;
+  --accent:#A66A00; --accent-ink:#7A4E00; --accent-wash:#F8F0DE;
+  --pass:#216B45; --pass-wash:#E4F0E9; --fail:#A32219; --fail-wash:#F8E6E4;
+  --shadow:0 1px 2px rgba(25,23,20,.05), 0 8px 24px -16px rgba(25,23,20,.28);
+  --font-th:"Leelawadee UI","Noto Sans Thai","Thonburi","Sarabun","Segoe UI",Tahoma,system-ui,sans-serif;
+  --font-mono:ui-monospace,"SF Mono","Cascadia Mono","Segoe UI Mono","Roboto Mono",Menlo,Consolas,monospace;
+  --measure:70ch; --rail:16rem;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground:#141210; --surface:#1C1917; --surface-2:#24201C;
+    --ink:#EFEAE2; --ink-2:#ADA49A; --ink-3:#7C736A;
+    --rule:#332D27; --rule-strong:#4A423A;
+    --accent:#E0A648; --accent-ink:#EFC077; --accent-wash:#2C2313;
+    --pass:#5FBF8C; --pass-wash:#16301F; --fail:#E5796C; --fail-wash:#331A17;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"] {
+  --ground:#141210; --surface:#1C1917; --surface-2:#24201C;
+  --ink:#EFEAE2; --ink-2:#ADA49A; --ink-3:#7C736A;
+  --rule:#332D27; --rule-strong:#4A423A;
+  --accent:#E0A648; --accent-ink:#EFC077; --accent-wash:#2C2313;
+  --pass:#5FBF8C; --pass-wash:#16301F; --fail:#E5796C; --fail-wash:#331A17;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+}
+:root[data-theme="light"] {
+  --ground:#F5F4F2; --surface:#FFFFFF; --surface-2:#EEECE8;
+  --ink:#191714; --ink-2:#57524B; --ink-3:#8A837A;
+  --rule:#DEDAD4; --rule-strong:#C4BEB5;
+  --accent:#A66A00; --accent-ink:#7A4E00; --accent-wash:#F8F0DE;
+  --pass:#216B45; --pass-wash:#E4F0E9; --fail:#A32219; --fail-wash:#F8E6E4;
+  --shadow:0 1px 2px rgba(25,23,20,.05), 0 8px 24px -16px rgba(25,23,20,.28);
+}
+
+* { box-sizing:border-box; }
+body {
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:var(--font-th); font-size:16.5px; line-height:1.85;
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+}
+:where(a){ color:var(--accent-ink); text-decoration-color:color-mix(in srgb, var(--accent) 40%, transparent); text-underline-offset:.22em; }
+:where(a):hover{ text-decoration-color:var(--accent); }
+:where(a,button,input,summary):focus-visible{ outline:2px solid var(--accent); outline-offset:3px; border-radius:3px; }
+
+.page{ display:grid; grid-template-columns:var(--rail) minmax(0,1fr); gap:3.5rem;
+       max-width:78rem; margin:0 auto; padding:0 2rem 6rem; align-items:start; }
+.main{ min-width:0; max-width:var(--measure); }
+@media (max-width:60rem){ .page{ grid-template-columns:minmax(0,1fr); gap:0; padding:0 1.15rem 4rem; } .main{ max-width:none; } }
+
+.masthead{ grid-column:1/-1; border-bottom:1px solid var(--rule);
+           padding:3.5rem 0 2rem; margin-bottom:2.5rem; display:flex; flex-direction:column; gap:.9rem; }
+.masthead__kicker{ font-family:var(--font-mono); font-size:.72rem; letter-spacing:.14em;
+                   text-transform:uppercase; color:var(--ink-3); display:flex; flex-wrap:wrap; gap:.55rem .9rem; align-items:center; }
+.masthead__kicker b{ color:var(--accent-ink); font-weight:600; }
+.masthead__kicker a{ color:var(--ink-3); text-decoration:none; }
+.masthead__kicker a:hover{ color:var(--accent-ink); }
+.masthead h1{ margin:0; font-size:clamp(1.8rem,1.2rem + 2.2vw,2.5rem); line-height:1.35;
+              font-weight:700; letter-spacing:-.005em; text-wrap:balance; }
+.masthead__sub{ margin:0; max-width:56ch; color:var(--ink-2); font-size:1.02rem; }
+
+.toc{ position:sticky; top:2rem; font-size:.875rem; line-height:1.6;
+      border-left:1px solid var(--rule); padding-left:1.1rem; }
+.toc__label{ font-family:var(--font-mono); font-size:.68rem; letter-spacing:.14em;
+             text-transform:uppercase; color:var(--ink-3); margin-bottom:.85rem; }
+.toc ol{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:.1rem; }
+.toc li{ margin:0; }
+.toc a{ display:block; padding:.3rem 0; color:var(--ink-2); text-decoration:none; border-radius:2px; }
+.toc a:hover{ color:var(--ink); }
+.toc a.is-active{ color:var(--accent-ink); font-weight:600; }
+@media (max-width:60rem){
+  .toc{ position:static; border-left:0; border:1px solid var(--rule); border-radius:3px;
+        background:var(--surface); padding:1rem 1.1rem; margin-bottom:2.5rem; }
+  .toc ol{ columns:2; column-gap:1.5rem; }
+  .toc li{ break-inside:avoid; }
+}
+
+h2{ margin:3.4rem 0 1.5rem; padding-bottom:.55rem; border-bottom:2px solid var(--ink);
+    font-size:clamp(1.25rem,1.1rem + .7vw,1.5rem); line-height:1.4; font-weight:700;
+    text-wrap:balance; scroll-margin-top:1.5rem; }
+.main > h2:first-child{ margin-top:0; }
+h3{ margin:2.6rem 0 .9rem; font-size:1.06rem; font-weight:700; line-height:1.5; scroll-margin-top:1.5rem; }
+h4{ margin:1.9rem 0 .6rem; font-size:.95rem; font-weight:700; color:var(--ink-2); }
+p{ margin:0 0 1rem; }
+strong{ font-weight:700; }
+ul,ol{ margin:0 0 1.1rem; padding-left:1.35rem; }
+li{ margin-bottom:.4rem; }
+li:last-child{ margin-bottom:0; }
+li > ul, li > ol { margin-top:.4rem; }
+hr{ border:0; border-top:1px solid var(--rule); margin:2.5rem 0; }
+
+/* ★ ในต้นฉบับ = ระดับความสำคัญ */
+.star{ color:var(--accent); font-size:.9em; }
+
+blockquote{ margin:1.4rem 0; padding:.1rem 0 .1rem 1.1rem;
+            border-left:3px solid var(--rule-strong); color:var(--ink-2); font-size:.96rem; }
+blockquote strong{ color:var(--ink); }
+blockquote > :last-child{ margin-bottom:0; }
+/* blockquote ที่ขึ้นต้นด้วย ★ = คำเตือนสำคัญ */
+blockquote.is-flag{ background:var(--surface); border:1px solid var(--rule);
+                    border-left:4px solid var(--accent); border-radius:2px;
+                    padding:1.05rem 1.25rem; box-shadow:var(--shadow); color:var(--ink); }
+
+.tw{ overflow-x:auto; margin:1.4rem 0; border:1px solid var(--rule); border-radius:3px;
+     background:var(--surface); -webkit-overflow-scrolling:touch; }
+table{ border-collapse:collapse; width:100%; font-size:.93rem; line-height:1.65;
+       font-variant-numeric:tabular-nums; }
+thead th{ background:var(--surface-2); text-align:left; font-weight:700; font-size:.8rem;
+          color:var(--ink-2); padding:.6rem .85rem; border-bottom:1px solid var(--rule-strong); white-space:nowrap; }
+td{ padding:.62rem .85rem; border-bottom:1px solid var(--rule); vertical-align:top; text-align:left; }
+tbody tr:last-child td{ border-bottom:0; }
+td:empty{ min-width:4rem; }
+
+code{ font-family:var(--font-mono); font-size:.875em; background:var(--surface-2);
+      padding:.1em .38em; border-radius:2px; }
+pre{ font-family:var(--font-mono); font-size:.85rem; line-height:1.7; background:var(--surface);
+     border:1px solid var(--rule); border-radius:3px; padding:1rem 1.15rem; margin:1.3rem 0;
+     overflow-x:auto; color:var(--ink); font-variant-numeric:tabular-nums; }
+pre code{ background:none; padding:0; font-size:1em; white-space:pre; }
+
+/* เช็กลิสต์ติ๊กได้ จำสถานะไว้ — ใช้ li.chk เพื่อรองรับรายการซ้อนชั้น */
+ul:has(> li.chk){ list-style:none; margin:1.1rem 0 1.5rem; padding:0; }
+li.chk > ul{ margin:.3rem 0 .5rem 1.8rem; }
+li.chk{ margin:0; }
+li.chk > label{ display:flex; gap:.7rem; align-items:flex-start; padding:.5rem .7rem;
+                border-radius:3px; cursor:pointer; transition:background .12s ease; }
+li.chk > label:hover{ background:var(--surface-2); }
+li.chk input{ appearance:none; flex:0 0 auto; width:1.05rem; height:1.05rem; margin:.38rem 0 0;
+              border:1.5px solid var(--rule-strong); border-radius:2px; background:var(--surface);
+              cursor:pointer; position:relative; }
+li.chk input:checked{ background:var(--pass); border-color:var(--pass); }
+li.chk input:checked::after{ content:""; position:absolute; left:5px; top:1px; width:4px; height:9px;
+                             border:solid var(--surface); border-width:0 2px 2px 0; transform:rotate(42deg); }
+li.chk input:checked + span{ color:var(--ink-3); text-decoration:line-through; text-decoration-thickness:1px; }
+li.chk > label > span{ flex:1; }
+.checks-reset{ font-family:var(--font-mono); font-size:.72rem; letter-spacing:.06em; background:none;
+               border:1px solid var(--rule); border-radius:2px; color:var(--ink-3);
+               padding:.3rem .65rem; cursor:pointer; margin:.4rem 0 1.5rem; display:inline-block; }
+.checks-reset:hover{ color:var(--ink); border-color:var(--rule-strong); }
+
+/* หน้า index */
+.cards{ list-style:none; padding:0; margin:0; display:grid; gap:.65rem; }
+.cards li{ margin:0; }
+.cards a{ display:flex; gap:1rem; align-items:baseline; text-decoration:none; color:inherit;
+          background:var(--surface); border:1px solid var(--rule); border-radius:3px;
+          padding:.9rem 1.1rem; transition:border-color .12s ease, transform .12s ease; }
+.cards a:hover{ border-color:var(--accent); transform:translateX(2px); }
+.cards .n{ font-family:var(--font-mono); font-size:.85rem; color:var(--ink-3); font-variant-numeric:tabular-nums; }
+.cards .t{ font-weight:700; display:block; margin-bottom:.1rem; }
+.cards .d{ color:var(--ink-2); font-size:.92rem; display:block; line-height:1.6; }
+.cards .is-key .t{ color:var(--accent-ink); }
+.cards a.is-key{ border-left:3px solid var(--accent); }
+
+@media print{
+  :root{ --ground:#fff; --surface:#fff; --surface-2:#f2f2f2; --ink:#000; --ink-2:#333; --ink-3:#666;
+         --rule:#bbb; --rule-strong:#888; --accent:#000; --accent-ink:#000; --accent-wash:#f4f4f4; --shadow:none; }
+  body{ font-size:10.5pt; line-height:1.65; }
+  .toc,.checks-reset{ display:none; }
+  .page{ display:block; max-width:none; padding:0; }
+  h2,h3,h4{ page-break-after:avoid; }
+  .tw,pre,blockquote{ page-break-inside:avoid; }
+  a{ text-decoration:none; color:#000; }
+}
+@media (prefers-reduced-motion: reduce){ *{ animation:none !important; transition:none !important; scroll-behavior:auto !important; } }
+html{ scroll-behavior:smooth; }
+</style>
+</head>
+<body data-doc="06-pdpa-compliance">
+<div class="page">
+  <header class="masthead">
+    <div class="masthead__kicker">
+      <span>เอกสาร 06</span><span>·</span><span>ระบบดัชนีสืบค้นภาพจากกล้องวงจรปิด</span><span>·</span><a href="index.html"><b>สารบัญทั้งหมด</b></a>
+    </div>
+    <h1>การปฏิบัติตาม PDPA</h1>
+    <p class="masthead__sub"><strong>เอกสารนี้เป็นแนวทางทางเทคนิค ไม่ใช่คำแนะนำทางกฎหมาย</strong> ต้องให้ฝ่ายกฎหมายหรือ DPO ของบริษัทตรวจสอบและอนุมัติก่อนเปิดใช้งานจริง โดยเฉพาะ <strong>ก่อนเริ่มเฟส 4 (ระบบใบหน้า)</strong></p>
+  </header>
+  <nav class="toc" aria-label="สารบัญ">
+    <div class="toc__label">สารบัญ</div>
+    <ol>
+      <li><a href="#1-ข้อมูลที่ระบบเก็บและระดับความอ่อนไหว">1. ข้อมูลที่ระบบเก็บและระดับความอ่อนไหว</a></li>
+      <li><a href="#2-ข้อได้เปรียบของการทำเฉพาะจุดคอขวด">2. ★ ข้อได้เปรียบของการทำเฉพาะจุดคอขวด</a></li>
+      <li><a href="#3-สิ่งที่ต้องทำก่อนเปิดใช้งาน">3. สิ่งที่ต้องทำก่อนเปิดใช้งาน</a></li>
+      <li><a href="#4-การควบคุมสิทธิ์-rbac">4. การควบคุมสิทธิ์ (RBAC)</a></li>
+      <li><a href="#5-audit-log">5. Audit Log</a></li>
+      <li><a href="#6-retention-และการลบข้อมูล">6. Retention และการลบข้อมูล</a></li>
+      <li><a href="#7-การรักษาความมั่นคงปลอดภัย">7. การรักษาความมั่นคงปลอดภัย</a></li>
+      <li><a href="#8-การใช้สิทธิของเจ้าของข้อมูล">8. การใช้สิทธิของเจ้าของข้อมูล</a></li>
+      <li><a href="#9-ข้อควรระวังเฉพาะระบบนี้">9. ข้อควรระวังเฉพาะระบบนี้</a></li>
+      <li><a href="#10-เช็กลิสต์ก่อนเปิดใช้งานแต่ละไซต์">10. เช็กลิสต์ก่อนเปิดใช้งานแต่ละไซต์</a></li>
+      <li><a href="#เอกสารที่เกี่ยวข้อง">เอกสารที่เกี่ยวข้อง</a></li>
+    </ol>
+  </nav>
+  <main class="main">
+<hr />
+<h2 id="1-ข้อมูลที่ระบบเก็บและระดับความอ่อนไหว">1. ข้อมูลที่ระบบเก็บและระดับความอ่อนไหว</h2>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>ข้อมูล</th>
+<th>ประเภทตาม PDPA</th>
+<th>ระดับความเสี่ยง</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ภาพใบหน้า + <strong>face embedding</strong></td>
+<td><strong>ข้อมูลชีวมิติ = ข้อมูลอ่อนไหว (ม.26)</strong></td>
+<td><strong>สูงสุด</strong></td>
+</tr>
+<tr>
+<td>ป้ายทะเบียนรถ</td>
+<td>ข้อมูลส่วนบุคคล (ระบุตัวบุคคลได้ทางอ้อม)</td>
+<td>ปานกลาง</td>
+</tr>
+<tr>
+<td>ภาพรถ สี ประเภท</td>
+<td>ข้อมูลส่วนบุคคลเมื่อเชื่อมกับทะเบียน</td>
+<td>ต่ำ–ปานกลาง</td>
+</tr>
+<tr>
+<td>เวลาเข้า–ออก</td>
+<td>ข้อมูลส่วนบุคคลเมื่อเชื่อมกับบุคคล</td>
+<td>ปานกลาง</td>
+</tr>
+<tr>
+<td>ภาพวิดีโอทั่วไป</td>
+<td>ข้อมูลส่วนบุคคล</td>
+<td>ต่ำ–ปานกลาง</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="1-1-ทำไมใบหน้าถึงต่างจากป้ายทะเบียน">1.1 <span class="star">★</span> ทำไมใบหน้าถึงต่างจากป้ายทะเบียน</h3>
+<p><strong>ข้อมูลชีวมิติเป็นข้อมูลอ่อนไหวตามมาตรา 26</strong> ซึ่งมีข้อกำหนดเข้มกว่าข้อมูลส่วนบุคคลทั่วไปมาก โดยหลักต้องได้รับ <strong>ความยินยอมโดยชัดแจ้ง</strong> เว้นแต่เข้าข้อยกเว้นตามที่กฎหมายกำหนด</p>
+<p><strong>นี่คือเหตุผลที่แผนงานทำป้ายทะเบียนก่อนใบหน้า</strong> (<a href="00-decisions.html">ADR-008</a>) — พิสูจน์คุณค่าของระบบด้วยส่วนที่ความเสี่ยงต่ำกว่าก่อน</p>
+<hr />
+<h2 id="2-ข้อได้เปรียบของการทำเฉพาะจุดคอขวด">2. <span class="star">★</span> ข้อได้เปรียบของการทำเฉพาะจุดคอขวด</h2>
+<p>การเลือกวิเคราะห์เฉพาะประตูเข้า–ออก (<a href="00-decisions.html">ADR-004</a>) ช่วยเรื่อง PDPA อย่างมาก:</p>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>หลักการตามกฎหมาย</th>
+<th>การทำเฉพาะจุดคอขวดช่วยอย่างไร</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>ความได้สัดส่วน</strong> (เก็บเท่าที่จำเป็น)</td>
+<td>เก็บเฉพาะจุดที่จำเป็นต่อวัตถุประสงค์ ไม่สแกนทั่วทั้งโกดัง</td>
+</tr>
+<tr>
+<td><strong>ความโปร่งใส</strong></td>
+<td>ติดป้ายแจ้งได้ครบทุกจุดที่เก็บจริง เพราะมีแค่ 2–4 จุด</td>
+</tr>
+<tr>
+<td><strong>การจำกัดวัตถุประสงค์</strong></td>
+<td>ขอบเขตชัด: ควบคุมการเข้า–ออก ไม่ใช่เฝ้าดูพฤติกรรมพนักงาน</td>
+</tr>
+<tr>
+<td><strong>ลดปริมาณข้อมูล</strong></td>
+<td>เก็บข้อมูลบุคคลน้อยลงมากเทียบกับการสแกน 32 กล้อง</td>
+</tr>
+</tbody>
+</table></div>
+<blockquote>
+<p>ถ้าถูกตรวจสอบ การอธิบายว่า &quot;เราสแกนเฉพาะประตู เพื่อควบคุมการเข้า-ออก และมีป้ายแจ้งทุกจุด&quot;
+ทำได้ง่ายกว่าการอธิบายว่า &quot;เราสแกนใบหน้าทุกคนทั่วทั้งโกดังตลอดเวลา&quot; อย่างมาก</p>
+</blockquote>
+<hr />
+<h2 id="3-สิ่งที่ต้องทำก่อนเปิดใช้งาน">3. สิ่งที่ต้องทำก่อนเปิดใช้งาน</h2>
+<h3 id="3-1-งานด้านเอกสารและกระบวนการ-ฝ่ายกฎหมาย-hr">3.1 งานด้านเอกสารและกระบวนการ (ฝ่ายกฎหมาย/HR)</h3>
+<ul>
+<li class="chk"><label><input type="checkbox"><span>กำหนด <strong>ฐานทางกฎหมาย</strong> ที่ใช้เก็บข้อมูลใบหน้า และบันทึกไว้เป็นลายลักษณ์อักษร</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>จัดทำ <strong>บันทึกรายการกิจกรรมการประมวลผล (ROPA)</strong></span></label></li>
+<li class="chk"><label><input type="checkbox"><span>จัดทำ <strong>ประกาศความเป็นส่วนตัว (Privacy Notice)</strong> สำหรับพนักงานและผู้มาติดต่อ</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ประเมินว่าต้องทำ <strong>DPIA</strong> หรือไม่ (ระบบจดจำใบหน้ามักเข้าข่าย)</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>กำหนด <strong>ระยะเวลาเก็บ</strong> ของแต่ละประเภทข้อมูล</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>กำหนดกระบวนการรองรับ <strong>การใช้สิทธิของเจ้าของข้อมูล</strong> (ขอเข้าถึง/ขอลบ)</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>แต่งตั้งผู้รับผิดชอบ (DPO) ถ้าเข้าเกณฑ์</span></label></li>
+</ul>
+<h3 id="3-2-งานหน้างาน">3.2 งานหน้างาน</h3>
+<ul>
+<li class="chk"><label><input type="checkbox"><span><strong>ติดป้ายแจ้งเตือนที่จุดคอขวดทุกจุด</strong> ก่อนถึงจุดที่กล้องจับภาพ</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ป้ายต้องระบุ: มีการบันทึกภาพและ<strong>ข้อมูลใบหน้า</strong>, วัตถุประสงค์, ผู้ควบคุมข้อมูล, ช่องทางติดต่อ</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ป้ายเป็น <strong>ภาษาไทยและอังกฤษ</strong></span></label></li>
+<li class="chk"><label><input type="checkbox"><span>แจ้งพนักงานผ่านช่องทางภายในก่อนเริ่มใช้งาน</span></label></li>
+</ul>
+<h3 id="3-3-งานด้านเทคนิค-ในระบบ">3.3 งานด้านเทคนิค (ในระบบ)</h3>
+<ul>
+<li class="chk"><label><input type="checkbox"><span><code>persons.consent_basis</code> บันทึกฐานทางกฎหมายของทุกคนใน watchlist</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>RBAC แยกสิทธิ์ (ดูหัวข้อ 4)</span></label></li>
+<li class="chk"><label><input type="checkbox"><span><code>audit_log</code> บันทึกทุกการเข้าถึงข้อมูลบุคคล (ดูหัวข้อ 5)</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>retention อัตโนมัติพร้อมการลบไฟล์จริง (ดูหัวข้อ 6)</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>เข้ารหัสข้อมูลที่จัดเก็บ (ดูหัวข้อ 7)</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ฟังก์ชันลบข้อมูลของบุคคลตามคำขอ (ดูหัวข้อ 8)</span></label></li>
+</ul>
+<hr />
+<h2 id="4-การควบคุมสิทธิ์-rbac">4. การควบคุมสิทธิ์ (RBAC)</h2>
+<p><strong>หลักการ: การดูภาพกับการรู้ว่าเป็นใคร ต้องเป็นสิทธิ์คนละระดับ</strong></p>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>บทบาท</th>
+<th>ค้นทะเบียน</th>
+<th>ดูภาพ/คลิป</th>
+<th>ค้นด้วยใบหน้า</th>
+<th>ดู/แก้ watchlist</th>
+<th>ตั้งค่าระบบ</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>viewer</code> (รปภ.)</td>
+<td>✓</td>
+<td>✓</td>
+<td>✗</td>
+<td>✗</td>
+<td>✗</td>
+</tr>
+<tr>
+<td><code>investigator</code></td>
+<td>✓</td>
+<td>✓</td>
+<td>✓</td>
+<td>ดูอย่างเดียว</td>
+<td>✗</td>
+</tr>
+<tr>
+<td><code>manager</code></td>
+<td>✓</td>
+<td>✓</td>
+<td>✓</td>
+<td>✓</td>
+<td>✗</td>
+</tr>
+<tr>
+<td><code>admin</code></td>
+<td>✓</td>
+<td>✓</td>
+<td>✓</td>
+<td>✓</td>
+<td>✓</td>
+</tr>
+</tbody>
+</table></div>
+<blockquote>
+<p><strong>เจ้าหน้าที่รักษาความปลอดภัยส่วนใหญ่ต้องการแค่ <code>viewer</code></strong> — ค้นทะเบียนและดูภาพก็เพียงพอต่องานประจำวัน
+การให้สิทธิ์ค้นใบหน้ากับทุกคนคือความเสี่ยงที่ไม่จำเป็น</p>
+</blockquote>
+<h3 id="4-1-ข้อกำหนดเพิ่มเติม">4.1 ข้อกำหนดเพิ่มเติม</h3>
+<ul>
+<li>บัญชีต้องเป็นรายบุคคล <strong>ห้ามใช้บัญชีร่วม</strong> (ไม่งั้น audit log ไร้ความหมาย)</li>
+<li>บังคับเปลี่ยนรหัสผ่านเริ่มต้นตอนติดตั้ง</li>
+<li>ระบบเข้าถึงได้เฉพาะใน LAN <strong>ห้ามเปิดออกอินเทอร์เน็ตโดยตรง</strong></li>
+<li>ถ้าจำเป็นต้องเข้าจากภายนอก ให้ใช้ VPN เท่านั้น</li>
+</ul>
+<hr />
+<h2 id="5-audit-log">5. Audit Log</h2>
+<h3 id="5-1-สิ่งที่ต้องบันทึก">5.1 สิ่งที่ต้องบันทึก</h3>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>การกระทำ</th>
+<th>บันทึกอะไร</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>เข้าสู่ระบบ / ออกจากระบบ</td>
+<td>ผู้ใช้, เวลา, IP</td>
+</tr>
+<tr>
+<td><strong>ค้นหาด้วยใบหน้า</strong></td>
+<td>ผู้ใช้, เวลา, IP, <strong>ภาพที่ใช้ค้น (hash)</strong>, จำนวนผลลัพธ์</td>
+</tr>
+<tr>
+<td>ค้นหาด้วยทะเบียน</td>
+<td>ผู้ใช้, เวลา, คำค้น</td>
+</tr>
+<tr>
+<td>ดูข้อมูลบุคคล</td>
+<td>ผู้ใช้, เวลา, <code>person_id</code></td>
+</tr>
+<tr>
+<td>เพิ่ม/แก้/ลบ watchlist</td>
+<td>ผู้ใช้, เวลา, ค่าก่อน-หลัง</td>
+</tr>
+<tr>
+<td>ส่งออกรายงาน</td>
+<td>ผู้ใช้, เวลา, ขอบเขตข้อมูลที่ส่งออก</td>
+</tr>
+<tr>
+<td>ลบข้อมูลตามคำขอ</td>
+<td>ผู้ใช้, เวลา, สิ่งที่ลบ</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="5-2-ข้อกำหนด">5.2 ข้อกำหนด</h3>
+<ul>
+<li>เก็บ audit log <strong>3 ปี</strong> (นานกว่าข้อมูลที่ audit เอง)</li>
+<li><strong>ผู้ใช้ทั่วไปลบ audit log ไม่ได้</strong> แม้แต่ <code>admin</code></li>
+<li>ทบทวน log เป็นระยะ — ดูว่ามีการค้นหาผิดปกติหรือไม่ (เช่น ค้นใบหน้าคนเดิมซ้ำ ๆ นอกเวลางาน)</li>
+</ul>
+<hr />
+<h2 id="6-retention-และการลบข้อมูล">6. Retention และการลบข้อมูล</h2>
+<h3 id="6-1-นโยบายที่แนะนำ">6.1 นโยบายที่แนะนำ</h3>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>ข้อมูล</th>
+<th>ระยะเวลา</th>
+<th>หมายเหตุ</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>คลิปวิดีโอ</td>
+<td>90 วัน</td>
+<td>NVR มีของจริงอยู่แล้ว</td>
+</tr>
+<tr>
+<td>snapshot / crop รถ</td>
+<td>365 วัน</td>
+<td></td>
+</tr>
+<tr>
+<td><strong>crop ใบหน้า</strong></td>
+<td><strong>ตามที่ฝ่ายกฎหมายกำหนด</strong></td>
+<td><span class="star">★</span> ควรสั้นที่สุดเท่าที่ใช้งานได้</td>
+</tr>
+<tr>
+<td><strong>face_embeddings</strong></td>
+<td><strong>ตามที่ฝ่ายกฎหมายกำหนด</strong></td>
+<td><span class="star">★</span> ข้อมูลชีวมิติ</td>
+</tr>
+<tr>
+<td>ทะเบียน + metadata</td>
+<td>365 วัน</td>
+<td></td>
+</tr>
+<tr>
+<td>audit_log</td>
+<td>3 ปี</td>
+<td></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="6-2-ข้อกำหนดทางเทคนิค">6.2 ข้อกำหนดทางเทคนิค</h3>
+<ul>
+<li>งานลบอัตโนมัติต้องรันทุกวัน <strong>และต้องลบไฟล์จริงใน object store ด้วย</strong> ไม่ใช่แค่ลบแถวใน DB</li>
+<li>ต้องมีการตรวจว่าไม่มีไฟล์กำพร้าสะสม (ดู <a href="07-operations.html"><code>07-operations.md</code></a>)</li>
+<li><strong>การสำรองข้อมูลต้องมี retention ด้วย</strong> — ถ้า backup เก็บ 5 ปีแต่ข้อมูลจริงลบที่ 1 ปี ก็ยังถือว่าไม่ได้ลบ</li>
+<li>บันทึกผลการลบลง audit log</li>
+</ul>
+<h3 id="6-3-retention-ของ-backup">6.3 <span class="star">★</span> retention ของ backup</h3>
+<pre><code>ถ้า face_embeddings เก็บ 180 วัน
+→ backup ที่มี face_embeddings ต้องเก็บไม่เกิน 180 วันเช่นกัน
+→ หรือแยก backup ที่ไม่มีข้อมูลใบหน้าออกมาต่างหากสำหรับเก็บยาว
+</code></pre>
+<p>จุดนี้มักถูกมองข้ามและทำให้ไม่ผ่านการตรวจสอบ</p>
+<hr />
+<h2 id="7-การรักษาความมั่นคงปลอดภัย">7. การรักษาความมั่นคงปลอดภัย</h2>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>มาตรการ</th>
+<th>รายละเอียด</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>เข้ารหัสข้อมูลที่จัดเก็บ</strong></td>
+<td>เข้ารหัสดิสก์ทั้งลูก (LUKS) บนเครื่องที่ไซต์</td>
+</tr>
+<tr>
+<td><strong>เข้ารหัสการรับส่ง</strong></td>
+<td>HTTPS สำหรับหน้าเว็บ (self-signed ในวง LAN ก็ได้)</td>
+</tr>
+<tr>
+<td><strong>แยกเครือข่าย</strong></td>
+<td>กล้องและ NVR อยู่ VLAN แยกจากเครือข่ายสำนักงาน</td>
+</tr>
+<tr>
+<td><strong>ไม่เปิดสู่อินเทอร์เน็ต</strong></td>
+<td>ห้าม port forward เข้าระบบหรือกล้องโดยตรง</td>
+</tr>
+<tr>
+<td><strong>เปลี่ยนรหัสผ่านเริ่มต้น</strong></td>
+<td>ทั้งกล้อง NVR และระบบ</td>
+</tr>
+<tr>
+<td><strong>อัปเดตความปลอดภัย</strong></td>
+<td>ตั้งตารางอัปเดต OS และ Docker image</td>
+</tr>
+<tr>
+<td><strong>สำรองข้อมูลนอกไซต์</strong></td>
+<td>เข้ารหัสก่อนส่งออกนอกไซต์เสมอ</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<h2 id="8-การใช้สิทธิของเจ้าของข้อมูล">8. การใช้สิทธิของเจ้าของข้อมูล</h2>
+<p>ระบบต้องรองรับคำขอเหล่านี้ <strong>ภายในกรอบเวลาที่กฎหมายกำหนด</strong></p>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>สิทธิ</th>
+<th>สิ่งที่ระบบต้องทำได้</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>ขอเข้าถึง</strong></td>
+<td>ค้นและส่งออกข้อมูลทั้งหมดของบุคคลนั้น</td>
+</tr>
+<tr>
+<td><strong>ขอแก้ไข</strong></td>
+<td>แก้ชื่อ/ข้อมูลใน <code>persons</code></td>
+</tr>
+<tr>
+<td><strong>ขอลบ</strong></td>
+<td>ลบ <code>persons</code> + <code>face_embeddings</code> + crop ใบหน้าที่เกี่ยวข้องทั้งหมด</td>
+</tr>
+<tr>
+<td><strong>ขอคัดค้าน</strong></td>
+<td>หยุดประมวลผลข้อมูลของบุคคลนั้น (flag ไม่ให้เก็บ embedding ใหม่)</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="8-1-ข้อกำหนดของฟังก์ชันลบ">8.1 ข้อกำหนดของฟังก์ชันลบ</h3>
+<ul>
+<li>ลบทั้ง <strong>แถวใน DB และไฟล์ crop ในดิสก์</strong></li>
+<li>ลบใน <strong>backup ด้วย</strong> หรือมีกระบวนการรองรับที่บันทึกไว้</li>
+<li>บันทึกการลบลง <code>audit_log</code></li>
+<li>ออกหลักฐานการลบให้ผู้ยื่นคำขอได้</li>
+</ul>
+<blockquote>
+<p><strong>ต้องทดสอบฟังก์ชันนี้จริงก่อนเปิดใช้งาน</strong> ไม่ใช่รอให้มีคำขอแรกแล้วค่อยพบว่าทำไม่ได้</p>
+</blockquote>
+<hr />
+<h2 id="9-ข้อควรระวังเฉพาะระบบนี้">9. ข้อควรระวังเฉพาะระบบนี้</h2>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>ประเด็น</th>
+<th>คำแนะนำ</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Face clustering สร้าง &quot;บุคคลนิรนาม&quot;</strong></td>
+<td>แม้ไม่มีชื่อ ก็ยังเป็นข้อมูลชีวมิติที่ระบุตัวได้ ต้องอยู่ภายใต้กฎเดียวกันทุกประการ</td>
+</tr>
+<tr>
+<td><strong>watchlist ต้องมีเหตุผลรองรับ</strong></td>
+<td>การใส่คนเข้า watchlist ต้องมีเหตุผลที่ชอบด้วยกฎหมายและบันทึกไว้ ไม่ใช่ใส่ตามใจ</td>
+</tr>
+<tr>
+<td><strong>อย่าใช้เฝ้าดูพฤติกรรมพนักงาน</strong></td>
+<td>ระบบนี้มีวัตถุประสงค์ควบคุมการเข้า–ออก การเอาไปดูว่าใครมาสายเป็นการใช้ผิดวัตถุประสงค์</td>
+</tr>
+<tr>
+<td><strong>ป้ายทะเบียนเชื่อมโยงถึงบุคคลได้</strong></td>
+<td>อย่าคิดว่าทะเบียนไม่ใช่ข้อมูลส่วนบุคคล — เมื่อเชื่อมกับตัวตนแล้วก็เป็น</td>
+</tr>
+<tr>
+<td><strong>ผลลัพธ์ AI ไม่ใช่ข้อเท็จจริง</strong></td>
+<td>ต้องมีคนตรวจสอบยืนยันด้วยวิดีโอเสมอ ห้ามใช้ผล AI ตัดสินลงโทษใครโดยตรง</td>
+</tr>
+<tr>
+<td><strong>แจ้งจุดบอดให้ผู้ใช้ทราบ</strong></td>
+<td>อย่าให้เข้าใจผิดว่าระบบเห็นทุกคน อาจนำไปสู่ข้อสรุปที่ผิดพลาด</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<h2 id="10-เช็กลิสต์ก่อนเปิดใช้งานแต่ละไซต์">10. เช็กลิสต์ก่อนเปิดใช้งานแต่ละไซต์</h2>
+<h3 id="ก่อนเปิดเฟส-3-ป้ายทะเบียน">ก่อนเปิดเฟส 3 (ป้ายทะเบียน)</h3>
+<ul>
+<li class="chk"><label><input type="checkbox"><span>ป้ายแจ้งเตือนการบันทึกภาพติดตั้งครบทุกจุดคอขวด</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>Privacy Notice เผยแพร่แล้ว</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>RBAC ตั้งค่าแล้ว ไม่มีบัญชีร่วม</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>audit_log ทำงาน</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>retention อัตโนมัติทำงานและทดสอบแล้ว</span></label></li>
+</ul>
+<h3 id="ก่อนเปิดเฟส-4-ใบหน้า-เพิ่มเติม"><span class="star">★</span> ก่อนเปิดเฟส 4 (ใบหน้า) — เพิ่มเติม</h3>
+<ul>
+<li class="chk"><label><input type="checkbox"><span><strong>ฝ่ายกฎหมาย/DPO อนุมัติเป็นลายลักษณ์อักษร</strong></span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ฐานทางกฎหมายกำหนดชัดเจนและบันทึกใน <code>consent_basis</code></span></label></li>
+<li class="chk"><label><input type="checkbox"><span>DPIA ทำแล้ว (ถ้าเข้าเกณฑ์)</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ป้ายแจ้งระบุชัดว่ามีการเก็บ<strong>ข้อมูลใบหน้า</strong> ไม่ใช่แค่ &quot;บันทึกภาพ&quot;</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ฟังก์ชันลบข้อมูลบุคคล <strong>ทดสอบแล้วว่าใช้ได้จริง</strong></span></label></li>
+<li class="chk"><label><input type="checkbox"><span>retention ของ backup สอดคล้องกับ retention ของข้อมูลจริง</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>อบรมผู้ใช้เรื่องขอบเขตการใช้งานที่ถูกต้อง</span></label></li>
+</ul>
+<hr />
+<h2 id="เอกสารที่เกี่ยวข้อง">เอกสารที่เกี่ยวข้อง</h2>
+<ul>
+<li><a href="04-data-model.html"><code>04-data-model.md</code></a> — ตาราง <code>audit_log</code>, <code>persons.consent_basis</code>, <code>retention_policies</code></li>
+<li><a href="07-operations.html"><code>07-operations.md</code></a> — งานลบข้อมูลอัตโนมัติและการสำรองข้อมูล</li>
+<li><a href="09-multi-site-runbook.html"><code>09-multi-site-runbook.md</code></a> — ขั้นตอนติดป้ายแจ้งตอนส่งมอบ</li>
+</ul>
+
+<button class="checks-reset" type="button">ล้างเครื่องหมายทั้งหมด</button>
+
+  </main>
+</div>
+<script>
+(function () {
+  "use strict";
+  var KEY = "docs-checks-" + (document.body.getAttribute("data-doc") || "x");
+  var boxes = Array.prototype.slice.call(document.querySelectorAll("li.chk input"));
+  var saved = {};
+  try { saved = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { saved = {}; }
+  boxes.forEach(function (box, i) {
+    if (saved[i]) box.checked = true;
+    box.addEventListener("change", function () {
+      saved[i] = box.checked;
+      try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch (e) {}
+    });
+  });
+  var reset = document.querySelector(".checks-reset");
+  if (reset) reset.addEventListener("click", function () {
+    boxes.forEach(function (b) { b.checked = false; });
+    saved = {};
+    try { localStorage.removeItem(KEY); } catch (e) {}
+  });
+
+  var links = {};
+  Array.prototype.forEach.call(document.querySelectorAll(".toc a"), function (a) {
+    links[a.getAttribute("href").slice(1)] = a;
+  });
+  var heads = document.querySelectorAll(".main h2");
+  if (!heads.length || !window.IntersectionObserver) return;
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      var link = links[e.target.id];
+      if (!link || !e.isIntersecting) return;
+      Object.keys(links).forEach(function (k) { links[k].classList.remove("is-active"); });
+      link.classList.add("is-active");
+    });
+  }, { rootMargin: "-8% 0px -80% 0px" });
+  Array.prototype.forEach.call(heads, function (h) { io.observe(h); });
+})();
+</script>
+</body>
+</html>

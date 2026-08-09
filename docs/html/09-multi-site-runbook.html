@@ -1,0 +1,590 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>09 — Runbook เปิดโกดังใหม่ — ระบบดัชนีสืบค้นภาพ</title>
+<style>
+:root {
+  --ground:#F5F4F2; --surface:#FFFFFF; --surface-2:#EEECE8;
+  --ink:#191714; --ink-2:#57524B; --ink-3:#8A837A;
+  --rule:#DEDAD4; --rule-strong:#C4BEB5;
+  --accent:#A66A00; --accent-ink:#7A4E00; --accent-wash:#F8F0DE;
+  --pass:#216B45; --pass-wash:#E4F0E9; --fail:#A32219; --fail-wash:#F8E6E4;
+  --shadow:0 1px 2px rgba(25,23,20,.05), 0 8px 24px -16px rgba(25,23,20,.28);
+  --font-th:"Leelawadee UI","Noto Sans Thai","Thonburi","Sarabun","Segoe UI",Tahoma,system-ui,sans-serif;
+  --font-mono:ui-monospace,"SF Mono","Cascadia Mono","Segoe UI Mono","Roboto Mono",Menlo,Consolas,monospace;
+  --measure:70ch; --rail:16rem;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground:#141210; --surface:#1C1917; --surface-2:#24201C;
+    --ink:#EFEAE2; --ink-2:#ADA49A; --ink-3:#7C736A;
+    --rule:#332D27; --rule-strong:#4A423A;
+    --accent:#E0A648; --accent-ink:#EFC077; --accent-wash:#2C2313;
+    --pass:#5FBF8C; --pass-wash:#16301F; --fail:#E5796C; --fail-wash:#331A17;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"] {
+  --ground:#141210; --surface:#1C1917; --surface-2:#24201C;
+  --ink:#EFEAE2; --ink-2:#ADA49A; --ink-3:#7C736A;
+  --rule:#332D27; --rule-strong:#4A423A;
+  --accent:#E0A648; --accent-ink:#EFC077; --accent-wash:#2C2313;
+  --pass:#5FBF8C; --pass-wash:#16301F; --fail:#E5796C; --fail-wash:#331A17;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+}
+:root[data-theme="light"] {
+  --ground:#F5F4F2; --surface:#FFFFFF; --surface-2:#EEECE8;
+  --ink:#191714; --ink-2:#57524B; --ink-3:#8A837A;
+  --rule:#DEDAD4; --rule-strong:#C4BEB5;
+  --accent:#A66A00; --accent-ink:#7A4E00; --accent-wash:#F8F0DE;
+  --pass:#216B45; --pass-wash:#E4F0E9; --fail:#A32219; --fail-wash:#F8E6E4;
+  --shadow:0 1px 2px rgba(25,23,20,.05), 0 8px 24px -16px rgba(25,23,20,.28);
+}
+
+* { box-sizing:border-box; }
+body {
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:var(--font-th); font-size:16.5px; line-height:1.85;
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+}
+:where(a){ color:var(--accent-ink); text-decoration-color:color-mix(in srgb, var(--accent) 40%, transparent); text-underline-offset:.22em; }
+:where(a):hover{ text-decoration-color:var(--accent); }
+:where(a,button,input,summary):focus-visible{ outline:2px solid var(--accent); outline-offset:3px; border-radius:3px; }
+
+.page{ display:grid; grid-template-columns:var(--rail) minmax(0,1fr); gap:3.5rem;
+       max-width:78rem; margin:0 auto; padding:0 2rem 6rem; align-items:start; }
+.main{ min-width:0; max-width:var(--measure); }
+@media (max-width:60rem){ .page{ grid-template-columns:minmax(0,1fr); gap:0; padding:0 1.15rem 4rem; } .main{ max-width:none; } }
+
+.masthead{ grid-column:1/-1; border-bottom:1px solid var(--rule);
+           padding:3.5rem 0 2rem; margin-bottom:2.5rem; display:flex; flex-direction:column; gap:.9rem; }
+.masthead__kicker{ font-family:var(--font-mono); font-size:.72rem; letter-spacing:.14em;
+                   text-transform:uppercase; color:var(--ink-3); display:flex; flex-wrap:wrap; gap:.55rem .9rem; align-items:center; }
+.masthead__kicker b{ color:var(--accent-ink); font-weight:600; }
+.masthead__kicker a{ color:var(--ink-3); text-decoration:none; }
+.masthead__kicker a:hover{ color:var(--accent-ink); }
+.masthead h1{ margin:0; font-size:clamp(1.8rem,1.2rem + 2.2vw,2.5rem); line-height:1.35;
+              font-weight:700; letter-spacing:-.005em; text-wrap:balance; }
+.masthead__sub{ margin:0; max-width:56ch; color:var(--ink-2); font-size:1.02rem; }
+
+.toc{ position:sticky; top:2rem; font-size:.875rem; line-height:1.6;
+      border-left:1px solid var(--rule); padding-left:1.1rem; }
+.toc__label{ font-family:var(--font-mono); font-size:.68rem; letter-spacing:.14em;
+             text-transform:uppercase; color:var(--ink-3); margin-bottom:.85rem; }
+.toc ol{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:.1rem; }
+.toc li{ margin:0; }
+.toc a{ display:block; padding:.3rem 0; color:var(--ink-2); text-decoration:none; border-radius:2px; }
+.toc a:hover{ color:var(--ink); }
+.toc a.is-active{ color:var(--accent-ink); font-weight:600; }
+@media (max-width:60rem){
+  .toc{ position:static; border-left:0; border:1px solid var(--rule); border-radius:3px;
+        background:var(--surface); padding:1rem 1.1rem; margin-bottom:2.5rem; }
+  .toc ol{ columns:2; column-gap:1.5rem; }
+  .toc li{ break-inside:avoid; }
+}
+
+h2{ margin:3.4rem 0 1.5rem; padding-bottom:.55rem; border-bottom:2px solid var(--ink);
+    font-size:clamp(1.25rem,1.1rem + .7vw,1.5rem); line-height:1.4; font-weight:700;
+    text-wrap:balance; scroll-margin-top:1.5rem; }
+.main > h2:first-child{ margin-top:0; }
+h3{ margin:2.6rem 0 .9rem; font-size:1.06rem; font-weight:700; line-height:1.5; scroll-margin-top:1.5rem; }
+h4{ margin:1.9rem 0 .6rem; font-size:.95rem; font-weight:700; color:var(--ink-2); }
+p{ margin:0 0 1rem; }
+strong{ font-weight:700; }
+ul,ol{ margin:0 0 1.1rem; padding-left:1.35rem; }
+li{ margin-bottom:.4rem; }
+li:last-child{ margin-bottom:0; }
+li > ul, li > ol { margin-top:.4rem; }
+hr{ border:0; border-top:1px solid var(--rule); margin:2.5rem 0; }
+
+/* ★ ในต้นฉบับ = ระดับความสำคัญ */
+.star{ color:var(--accent); font-size:.9em; }
+
+blockquote{ margin:1.4rem 0; padding:.1rem 0 .1rem 1.1rem;
+            border-left:3px solid var(--rule-strong); color:var(--ink-2); font-size:.96rem; }
+blockquote strong{ color:var(--ink); }
+blockquote > :last-child{ margin-bottom:0; }
+/* blockquote ที่ขึ้นต้นด้วย ★ = คำเตือนสำคัญ */
+blockquote.is-flag{ background:var(--surface); border:1px solid var(--rule);
+                    border-left:4px solid var(--accent); border-radius:2px;
+                    padding:1.05rem 1.25rem; box-shadow:var(--shadow); color:var(--ink); }
+
+.tw{ overflow-x:auto; margin:1.4rem 0; border:1px solid var(--rule); border-radius:3px;
+     background:var(--surface); -webkit-overflow-scrolling:touch; }
+table{ border-collapse:collapse; width:100%; font-size:.93rem; line-height:1.65;
+       font-variant-numeric:tabular-nums; }
+thead th{ background:var(--surface-2); text-align:left; font-weight:700; font-size:.8rem;
+          color:var(--ink-2); padding:.6rem .85rem; border-bottom:1px solid var(--rule-strong); white-space:nowrap; }
+td{ padding:.62rem .85rem; border-bottom:1px solid var(--rule); vertical-align:top; text-align:left; }
+tbody tr:last-child td{ border-bottom:0; }
+td:empty{ min-width:4rem; }
+
+code{ font-family:var(--font-mono); font-size:.875em; background:var(--surface-2);
+      padding:.1em .38em; border-radius:2px; }
+pre{ font-family:var(--font-mono); font-size:.85rem; line-height:1.7; background:var(--surface);
+     border:1px solid var(--rule); border-radius:3px; padding:1rem 1.15rem; margin:1.3rem 0;
+     overflow-x:auto; color:var(--ink); font-variant-numeric:tabular-nums; }
+pre code{ background:none; padding:0; font-size:1em; white-space:pre; }
+
+/* เช็กลิสต์ติ๊กได้ จำสถานะไว้ — ใช้ li.chk เพื่อรองรับรายการซ้อนชั้น */
+ul:has(> li.chk){ list-style:none; margin:1.1rem 0 1.5rem; padding:0; }
+li.chk > ul{ margin:.3rem 0 .5rem 1.8rem; }
+li.chk{ margin:0; }
+li.chk > label{ display:flex; gap:.7rem; align-items:flex-start; padding:.5rem .7rem;
+                border-radius:3px; cursor:pointer; transition:background .12s ease; }
+li.chk > label:hover{ background:var(--surface-2); }
+li.chk input{ appearance:none; flex:0 0 auto; width:1.05rem; height:1.05rem; margin:.38rem 0 0;
+              border:1.5px solid var(--rule-strong); border-radius:2px; background:var(--surface);
+              cursor:pointer; position:relative; }
+li.chk input:checked{ background:var(--pass); border-color:var(--pass); }
+li.chk input:checked::after{ content:""; position:absolute; left:5px; top:1px; width:4px; height:9px;
+                             border:solid var(--surface); border-width:0 2px 2px 0; transform:rotate(42deg); }
+li.chk input:checked + span{ color:var(--ink-3); text-decoration:line-through; text-decoration-thickness:1px; }
+li.chk > label > span{ flex:1; }
+.checks-reset{ font-family:var(--font-mono); font-size:.72rem; letter-spacing:.06em; background:none;
+               border:1px solid var(--rule); border-radius:2px; color:var(--ink-3);
+               padding:.3rem .65rem; cursor:pointer; margin:.4rem 0 1.5rem; display:inline-block; }
+.checks-reset:hover{ color:var(--ink); border-color:var(--rule-strong); }
+
+/* หน้า index */
+.cards{ list-style:none; padding:0; margin:0; display:grid; gap:.65rem; }
+.cards li{ margin:0; }
+.cards a{ display:flex; gap:1rem; align-items:baseline; text-decoration:none; color:inherit;
+          background:var(--surface); border:1px solid var(--rule); border-radius:3px;
+          padding:.9rem 1.1rem; transition:border-color .12s ease, transform .12s ease; }
+.cards a:hover{ border-color:var(--accent); transform:translateX(2px); }
+.cards .n{ font-family:var(--font-mono); font-size:.85rem; color:var(--ink-3); font-variant-numeric:tabular-nums; }
+.cards .t{ font-weight:700; display:block; margin-bottom:.1rem; }
+.cards .d{ color:var(--ink-2); font-size:.92rem; display:block; line-height:1.6; }
+.cards .is-key .t{ color:var(--accent-ink); }
+.cards a.is-key{ border-left:3px solid var(--accent); }
+
+@media print{
+  :root{ --ground:#fff; --surface:#fff; --surface-2:#f2f2f2; --ink:#000; --ink-2:#333; --ink-3:#666;
+         --rule:#bbb; --rule-strong:#888; --accent:#000; --accent-ink:#000; --accent-wash:#f4f4f4; --shadow:none; }
+  body{ font-size:10.5pt; line-height:1.65; }
+  .toc,.checks-reset{ display:none; }
+  .page{ display:block; max-width:none; padding:0; }
+  h2,h3,h4{ page-break-after:avoid; }
+  .tw,pre,blockquote{ page-break-inside:avoid; }
+  a{ text-decoration:none; color:#000; }
+}
+@media (prefers-reduced-motion: reduce){ *{ animation:none !important; transition:none !important; scroll-behavior:auto !important; } }
+html{ scroll-behavior:smooth; }
+</style>
+</head>
+<body data-doc="09-multi-site-runbook">
+<div class="page">
+  <header class="masthead">
+    <div class="masthead__kicker">
+      <span>เอกสาร 09</span><span>·</span><span>ระบบดัชนีสืบค้นภาพจากกล้องวงจรปิด</span><span>·</span><a href="index.html"><b>สารบัญทั้งหมด</b></a>
+    </div>
+    <h1>Runbook เปิดโกดังใหม่</h1>
+    <p class="masthead__sub">เอกสารนี้เป็น <strong>เช็กลิสต์ที่ติ๊กได้จริง</strong> ไม่ใช่คำบรรยาย เป้าหมาย: ช่างหน้างานเปิดไซต์ใหม่ได้เองโดยไม่ต้องโทรถามทีมพัฒนา  พิมพ์เอกสารนี้ออกมาแล้วติ๊กตามลำดับ เก็บไว้เป็นหลักฐานการส่งมอบ</p>
+  </header>
+  <nav class="toc" aria-label="สารบัญ">
+    <div class="toc__label">สารบัญ</div>
+    <ol>
+      <li><a href="#ข้อมูลไซต์">ข้อมูลไซต์</a></li>
+      <li><a href="#ขั้นที่-0-วางแผน-สำนักงาน-2-ชม">ขั้นที่ 0 — วางแผน (สำนักงาน, ~2 ชม.)</a></li>
+      <li><a href="#ขั้นที่-1-สำรวจหน้างาน-ที่ไซต์-4-ชม">ขั้นที่ 1 — สำรวจหน้างาน (ที่ไซต์, ~4 ชม.)</a></li>
+      <li><a href="#ขั้นที่-2-จัดซื้อ-1-3-สัปดาห์">ขั้นที่ 2 — จัดซื้อ (~1–3 สัปดาห์)</a></li>
+      <li><a href="#ขั้นที่-3-งานติดตั้งหน้างาน-ที่ไซต์-1-2-วัน">ขั้นที่ 3 — งานติดตั้งหน้างาน (ที่ไซต์, ~1–2 วัน)</a></li>
+      <li><a href="#ขั้นที่-4-ตรวจรับงานติดตั้ง-ที่ไซต์">ขั้นที่ 4 — ตรวจรับงานติดตั้ง (ที่ไซต์)</a></li>
+      <li><a href="#ขั้นที่-5-ติดตั้งซอฟต์แวร์-2-ชม">ขั้นที่ 5 — ติดตั้งซอฟต์แวร์ (~2 ชม.)</a></li>
+      <li><a href="#ขั้นที่-6-ตรวจรับระบบ">ขั้นที่ 6 — ตรวจรับระบบ</a></li>
+      <li><a href="#ขั้นที่-7-ส่งมอบและอบรม-2-ชม">ขั้นที่ 7 — ส่งมอบและอบรม (~2 ชม.)</a></li>
+      <li><a href="#ใบเซ็นรับมอบงาน">ใบเซ็นรับมอบงาน</a></li>
+      <li><a href="#หมายเหตุสำหรับการขยายหลายไซต์">หมายเหตุสำหรับการขยายหลายไซต์</a></li>
+      <li><a href="#เอกสารที่เกี่ยวข้อง">เอกสารที่เกี่ยวข้อง</a></li>
+    </ol>
+  </nav>
+  <main class="main">
+<hr />
+<h2 id="ข้อมูลไซต์">ข้อมูลไซต์</h2>
+<pre><code>SITE_ID:        WH____              ชื่อโกดัง: ________________________
+ที่อยู่:         ________________________________________________
+ผู้ประสานงาน:    ______________________  โทร: __________________
+ช่างผู้ติดตั้ง:   ______________________  วันที่เริ่ม: ______________
+วันที่ส่งมอบ:    ______________________
+</code></pre>
+<hr />
+<h2 id="ขั้นที่-0-วางแผน-สำนักงาน-2-ชม">ขั้นที่ 0 — วางแผน (สำนักงาน, ~2 ชม.)</h2>
+<ul>
+<li class="chk"><label><input type="checkbox"><span>กำหนด <code>SITE_ID</code> ตามรูปแบบ <code>WH01</code>, <code>WH02</code>, ... (ห้ามซ้ำกับไซต์อื่น)</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ขอผังพื้นที่โกดัง หรือภาพถ่ายดาวเทียม</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>นัดหมายเข้าสำรวจหน้างาน</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>เตรียมแบบสำรวจจาก <a href="10-chokepoint-design.html"><code>10-chokepoint-design.md</code></a> หัวข้อ 6</span></label></li>
+</ul>
+<hr />
+<h2 id="ขั้นที่-1-สำรวจหน้างาน-ที่ไซต์-4-ชม">ขั้นที่ 1 — สำรวจหน้างาน (ที่ไซต์, ~4 ชม.)</h2>
+<blockquote class="is-flag">
+<p><strong>ห้ามสั่งซื้อของก่อนทำขั้นนี้เสร็จ</strong></p>
+</blockquote>
+<h3 id="1-1-สำรวจทางเข้า-ออกทั้งหมด">1.1 สำรวจทางเข้า–ออกทั้งหมด</h3>
+<ul>
+<li class="chk"><label><input type="checkbox"><span>เดินรอบพื้นที่ <strong>ทั้งรอบ</strong> ทำรายการทางเข้า–ออกทุกจุด</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>กรอกตาราง &quot;รายการทางเข้า–ออกทั้งหมด&quot; ใน <code>10-chokepoint-design.md</code> หัวข้อ 6.1</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ถามเจ้าหน้าที่ประจำว่ามีทางลัด/ช่องรั้วที่คนใช้จริงหรือไม่ (มักไม่อยู่ในผัง)</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ตัดสินใจว่าจะติดจุดไหนบ้าง และ <strong>บันทึกจุดที่ไม่ติดพร้อมเหตุผล</strong></span></label></li>
+</ul>
+<h3 id="1-2-สำรวจแต่ละจุดคอขวดที่จะติดตั้ง">1.2 สำรวจแต่ละจุดคอขวดที่จะติดตั้ง</h3>
+<p>สำหรับแต่ละจุด กรอกแบบบันทึกใน <code>10-chokepoint-design.md</code> หัวข้อ 6.2:</p>
+<ul>
+<li class="chk"><label><input type="checkbox"><span>วัดระยะที่ติดกล้องได้ และความสูงที่ติดได้</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ตรวจทิศที่กล้องจะหัน (เลี่ยงตะวันออก/ตะวันตก)</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>วัดความเร็วรถปัจจุบัน และดูว่ามีลูกระนาด/ไม้กั้นอยู่แล้วหรือไม่</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ตรวจไฟฟ้าและสาย LAN ว่าถึงจุดหรือไม่ ถ้าไม่ วัดระยะที่ต้องเดินเพิ่ม</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ประเมินกล้องเดิม: ปรับ shutter ล็อก 1/500 ได้ไหม, มีโหมด LPR ไหม</span></label></li>
+<li class="chk"><label><input type="checkbox"><span><strong>ทดสอบจำนวน RTSP session</strong> — ต่อดูสตรีมพร้อมกัน 2–3 เครื่องขณะ NVR ยังใช้งานอยู่</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ตรวจ backlight ที่จุดคอขวดคน (ยืนที่ตำแหน่งคนเดินแล้วมองไปทางกล้อง)</span></label></li>
+</ul>
+<h3 id="1-3-สำรวจ-nvr-และเครือข่าย">1.3 สำรวจ NVR และเครือข่าย</h3>
+<ul>
+<li class="chk"><label><input type="checkbox"><span>บันทึกยี่ห้อ/รุ่น NVR, IP, บัญชีที่ใช้เข้าดู</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>บันทึกว่า NVR เก็บวิดีโอย้อนหลังกี่วัน</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>บันทึกช่อง (channel) ของกล้องแต่ละตัว</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ตรวจว่าไซต์มีอินเทอร์เน็ตหรือไม่ (มีผลกับ NTP และการอัปเดต)</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>จด subnet ของวง LAN และดูว่ามี IP ว่างสำหรับเครื่องใหม่</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ตรวจว่ามีปลั๊กไฟและพื้นที่วางมินิพีซี (ควรอยู่ในตู้ Rack หรือห้องที่มีแอร์)</span></label></li>
+</ul>
+<h3 id="1-4-สรุปผลสำรวจ">1.4 สรุปผลสำรวจ</h3>
+<ul>
+<li class="chk"><label><input type="checkbox"><span>สรุปว่าต้องซื้อกล้องใหม่กี่ตัว ไฟกี่ชุด ต้องทำลูกระนาดหรือไม่</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ประเมินงบตามตารางใน <code>10-chokepoint-design.md</code> หัวข้อ 9</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ส่งสรุปให้ผู้อนุมัติ</span></label></li>
+</ul>
+<hr />
+<h2 id="ขั้นที่-2-จัดซื้อ-1-3-สัปดาห์">ขั้นที่ 2 — จัดซื้อ (~1–3 สัปดาห์)</h2>
+<ul>
+<li class="chk"><label><input type="checkbox"><span>มินิพีซี — ดูทางเลือกและเกณฑ์ใน <code>02-hardware-sizing.md</code> หัวข้อ 1:
+<strong>แนะนำ</strong> Micro/Tiny มือสอง ซีพียูรุ่นลงท้าย T (เช่น i5-8500T) + SSD เพิ่ม
+หรือ N100/N305 ใหม่ถ้าไม่อยากยุ่งกับของมือสอง</span></label><ul>
+<li class="chk"><label><input type="checkbox"><span>ถ้าซื้อมือสอง: ตรวจรุ่นซีพียูว่า <strong>ไม่ใช่รุ่นที่ไม่มี AVX2</strong> (ดูตารางห้ามซื้อใน <code>02-hardware-sizing.md</code> หัวข้อ 1.3) และผ่านเช็กลิสต์หัวข้อ 1.5 ก่อนโอนเงิน</span></label></li>
+</ul>
+</li>
+<li class="chk"><label><input type="checkbox"><span>กล้อง LPR (1080p เซนเซอร์ ≥1/1.8&quot;, varifocal, ล็อก shutter ได้, มีโหมด LPR)</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>กล้อง overview (ถ้าไม่ใช้ของเดิม)</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>กล้องใบหน้า (ถ้าไม่ใช้ของเดิม)</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>IR illuminator 850nm และ/หรือ ไฟ LED ขาว</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>อุปกรณ์เดินสาย PoE switch สาย LAN</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ลูกระนาด (ถ้าต้องทำเพิ่ม)</span></label></li>
+</ul>
+<blockquote>
+<p><strong>อย่าลดสเปกกล้อง LPR เพื่อประหยัด</strong> — ดูเหตุผลใน <code>10-chokepoint-design.md</code> หัวข้อ 9
+เครื่องประมวลผลคือจุดที่ประหยัดได้จริงโดยไม่กระทบความแม่นยำ — ย้ายส่วนต่างไปลงกล้อง LPR แทน</p>
+</blockquote>
+<hr />
+<h2 id="ขั้นที่-3-งานติดตั้งหน้างาน-ที่ไซต์-1-2-วัน">ขั้นที่ 3 — งานติดตั้งหน้างาน (ที่ไซต์, ~1–2 วัน)</h2>
+<h3 id="3-1-งานโยธาและไฟฟ้า">3.1 งานโยธาและไฟฟ้า</h3>
+<ul>
+<li class="chk"><label><input type="checkbox"><span>ติดตั้งลูกระนาด <strong>ห่างจากโซนถ่ายภาพ 5–10 เมตร</strong></span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ตีเส้นบนพื้นกำหนดโซนถ่ายภาพให้เห็นชัด</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>เดินไฟฟ้าและสาย LAN ถึงจุดกล้องและจุดไฟส่องสว่าง</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ติดตั้ง PoE switch</span></label></li>
+</ul>
+<h3 id="3-2-ติดตั้งกล้อง-lpr">3.2 ติดตั้งกล้อง LPR</h3>
+<ul>
+<li class="chk"><label><input type="checkbox"><span>ติดที่ความสูง <strong>1.0–1.5 ม.</strong> (ไม่ใช่ 3–4 ม. ตามความเคยชิน)</span></label></li>
+<li class="chk"><label><input type="checkbox"><span><strong>หันจับท้ายรถ</strong> เพื่อให้ได้ป้ายมอเตอร์ไซค์ด้วย</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ปรับมุมเบี่ยงแนวนอน ≤ 30° และแนวดิ่ง ≤ 30°</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ปรับ zoom ให้ความกว้างภาพที่ระนาบป้าย ≤ 3.2 ม. (สำหรับ 1080p)</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ตั้งค่ากล้องตาม <code>10-chokepoint-design.md</code> หัวข้อ 3.8:</span></label><ul>
+<li class="chk"><label><input type="checkbox"><span><strong>ล็อก shutter 1/500s</strong> (ห้าม auto)</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>จำกัด gain สูงสุด ~50</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>เปิด WDR</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ลด/ปิด 3D DNR</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>bitrate substream ≥ 4 Mbps, codec H.264</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ปิดเสียง</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ปิด OSD timestamp หรือย้ายไม่ให้ทับโซนป้าย</span></label></li>
+</ul>
+</li>
+</ul>
+<h3 id="3-3-ติดตั้งกล้อง-overview-และกล้องใบหน้า">3.3 ติดตั้งกล้อง overview และกล้องใบหน้า</h3>
+<ul>
+<li class="chk"><label><input type="checkbox"><span>กล้อง overview: FOV กว้าง <strong>ภาพสี ห้ามเปิด IR</strong></span></label></li>
+<li class="chk"><label><input type="checkbox"><span>กล้องใบหน้า: สูง <strong>1.6–1.8 ม.</strong> มุมก้ม ≤ 15° ระยะจับภาพ 1.5–3 ม.</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ตรวจว่าไม่มี backlight ด้านหลังคน</span></label></li>
+</ul>
+<h3 id="3-4-ติดตั้งไฟส่องสว่าง">3.4 ติดตั้งไฟส่องสว่าง</h3>
+<ul>
+<li class="chk"><label><input type="checkbox"><span>เล็งไม่ให้แสงเข้าเลนส์กล้องโดยตรง</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>เล็งไม่ให้แยงตาคนขับ</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ตรวจว่าแสงตกบนโซนถ่ายภาพสม่ำเสมอ</span></label></li>
+</ul>
+<h3 id="3-5-ตั้ง-ip-และตั้งชื่อ">3.5 ตั้ง IP และตั้งชื่อ</h3>
+<ul>
+<li class="chk"><label><input type="checkbox"><span>ตั้ง <strong>IP แบบคงที่</strong> ให้กล้องทุกตัวและมินิพีซี (ห้ามใช้ DHCP)</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ตั้งชื่อกล้องตามรูปแบบ: <code>&lt;SITE_ID&gt;-&lt;จุด&gt;-&lt;บทบาท&gt;</code></span></label><ul>
+<li>ตัวอย่าง: <code>WH01-GATE-LPR</code>, <code>WH01-GATE-OVERVIEW</code>, <code>WH01-DOOR-FACE</code></li>
+</ul>
+</li>
+<li class="chk"><label><input type="checkbox"><span>บันทึก IP / บัญชี / รหัสผ่าน ลงในเอกสารส่งมอบ (<strong>ห้ามใส่ใน git</strong>)</span></label></li>
+</ul>
+<hr />
+<h2 id="ขั้นที่-4-ตรวจรับงานติดตั้ง-ที่ไซต์">ขั้นที่ 4 — ตรวจรับงานติดตั้ง (ที่ไซต์)</h2>
+<blockquote>
+<p><strong>ต้องผ่านทุกข้อก่อนไปขั้นที่ 5</strong> ถ้าไม่ผ่าน กลับไปแก้การติดตั้ง</p>
+</blockquote>
+<p>ใช้เช็กลิสต์เต็มจาก <a href="10-chokepoint-design.html"><code>10-chokepoint-design.md</code></a> หัวข้อ 7</p>
+<h3 id="4-1-ทดสอบกลางวัน">4.1 ทดสอบกลางวัน</h3>
+<ul>
+<li class="chk"><label><input type="checkbox"><span>รถยนต์ 20 คัน — ตัวอักษรบนป้าย ≥ 25 px ทุกคัน</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>มอเตอร์ไซค์ 20 คัน — ตัวอักษร ≥ 25 px ทุกคัน</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ป้ายอยู่ในเฟรมเต็มใบ ทั้งรถสูงและรถเตี้ย</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ทดสอบซ้ำตอน 07:00 และ 17:00 (แสงอาทิตย์แยง)</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ความเร็วรถผ่านโซนถ่ายภาพ ≤ 10 km/h</span></label></li>
+</ul>
+<h3 id="4-2-ทดสอบกลางคืน-ห้ามข้าม">4.2 <span class="star">★</span> ทดสอบกลางคืน (ห้ามข้าม)</h3>
+<ul>
+<li class="chk"><label><input type="checkbox"><span>รถ 20 คันหลัง 20:00 น. — อ่านป้ายด้วยตาเปล่าได้ ≥ 19 คัน</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ทดสอบมอเตอร์ไซค์กลางคืนแยกต่างหาก</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ไฟหน้ารถไม่ทำป้ายขาวโพลน (ทดสอบกับรถเปิดไฟสูง)</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>กล้องไม่สลับเป็น shutter ช้าอัตโนมัติตอนมืด</span></label></li>
+</ul>
+<h3 id="4-3-ทดสอบใบหน้า">4.3 ทดสอบใบหน้า</h3>
+<ul>
+<li class="chk"><label><input type="checkbox"><span>ระยะห่างระหว่างตา ≥ 60 px</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ไม่มี backlight ทั้งกลางวันและกลางคืน</span></label></li>
+</ul>
+<h3 id="4-4-เก็บชุดภาพตัวอย่าง">4.4 เก็บชุดภาพตัวอย่าง</h3>
+<ul>
+<li class="chk"><label><input type="checkbox"><span>เก็บภาพทดสอบไว้ที่ <code>samples/&lt;SITE_ID&gt;/day/</code> และ <code>samples/&lt;SITE_ID&gt;/night/</code></span></label></li>
+<li class="chk"><label><input type="checkbox"><span><strong>ห้ามลบ</strong> — จะใช้เป็น ground truth วัดความแม่นของ LPR</span></label></li>
+</ul>
+<hr />
+<h2 id="ขั้นที่-5-ติดตั้งซอฟต์แวร์-2-ชม">ขั้นที่ 5 — ติดตั้งซอฟต์แวร์ (~2 ชม.)</h2>
+<h3 id="5-1-เตรียมเครื่อง">5.1 เตรียมเครื่อง</h3>
+<ul>
+<li class="chk"><label><input type="checkbox"><span>ติดตั้ง Debian 12 หรือ Ubuntu 24.04 LTS</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ตั้ง timezone:</span></label></li>
+</ul>
+<pre><code class="language-bash">sudo timedatectl set-timezone Asia/Bangkok
+</code></pre>
+<ul>
+<li class="chk"><label><input type="checkbox"><span>ติดตั้ง Docker และ Docker Compose:</span></label></li>
+</ul>
+<pre><code class="language-bash">curl -fsSL https://get.docker.com | sudo sh
+</code></pre>
+<ul>
+<li class="chk"><label><input type="checkbox"><span>เพิ่มผู้ใช้เข้ากลุ่ม docker และ render (สำหรับ iGPU):</span></label></li>
+</ul>
+<pre><code class="language-bash">sudo usermod -aG docker,render,video $USER
+</code></pre>
+<ul>
+<li class="chk"><label><input type="checkbox"><span>ออกจากระบบแล้วเข้าใหม่ จากนั้นตรวจว่าเห็น iGPU:</span></label></li>
+</ul>
+<pre><code class="language-bash">ls -l /dev/dri
+</code></pre>
+<p>ต้องเห็น <code>renderD128</code> ถ้าไม่เห็น แปลว่า driver Intel ยังไม่พร้อม</p>
+<h3 id="5-2-ตั้ง-ntp">5.2 ตั้ง NTP</h3>
+<ul>
+<li class="chk"><label><input type="checkbox"><span><strong>ถ้าไซต์มีอินเทอร์เน็ต</strong>: ตรวจว่า <code>timedatectl status</code> แสดง <code>System clock synchronized: yes</code></span></label></li>
+<li class="chk"><label><input type="checkbox"><span><strong>ถ้าไซต์ไม่มีอินเทอร์เน็ต</strong>: ตั้งเครื่องนี้เป็น NTP server</span></label></li>
+</ul>
+<pre><code class="language-bash">sudo apt install -y chrony
+</code></pre>
+<p>แล้วเพิ่มบรรทัด <code>allow 192.168.1.0/24</code> (แก้เป็น subnet จริงของไซต์) ใน <code>/etc/chrony/chrony.conf</code> แล้วรีสตาร์ต:</p>
+<pre><code class="language-bash">sudo systemctl restart chrony
+</code></pre>
+<ul>
+<li class="chk"><label><input type="checkbox"><span>ตั้ง NTP ใน NVR ชี้มาที่ NTP source ที่เลือก (ดู <a href="08-nvr-integration.html"><code>08-nvr-integration.md</code></a> หัวข้อ 3.2)</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>สั่ง NVR &quot;Sync with NVR&quot; เพื่อดันเวลาไปให้กล้องทุกตัว</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ตั้ง NTP ในกล้อง ONVIF ที่ไม่ได้ต่อกับ NVR Dahua เอง</span></label></li>
+</ul>
+<h3 id="5-3-ติดตั้งระบบ">5.3 ติดตั้งระบบ</h3>
+<ul>
+<li class="chk"><label><input type="checkbox"><span>คัดลอกโปรเจกต์ลงเครื่อง</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>คัดลอก <code>.env.example</code> เป็น <code>.env</code> แล้วแก้ค่า:</span></label><ul>
+<li class="chk"><label><input type="checkbox"><span><code>SITE_ID</code> และ <code>SITE_NAME</code></span></label></li>
+<li class="chk"><label><input type="checkbox"><span>รหัสผ่านฐานข้อมูล (สุ่มใหม่ทุกไซต์)</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>บัญชี/รหัสผ่านกล้อง (<strong>URL-encode อักขระพิเศษ</strong> <code>@</code> <code>:</code> <code>/</code> <code>#</code>)</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>IP ของ NVR</span></label></li>
+<li class="chk"><label><input type="checkbox"><span><strong>ห้ามแก้เวอร์ชันที่ปักหมุดไว้</strong> — ทุกไซต์ต้องรันเวอร์ชันเดียวกัน</span></label></li>
+</ul>
+</li>
+<li class="chk"><label><input type="checkbox"><span>แก้ <code>frigate/config.yml</code> ใส่ RTSP URL และโซนของกล้องจริง</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ตรวจไวยากรณ์ก่อนสตาร์ต:</span></label></li>
+</ul>
+<pre><code class="language-bash">docker compose config
+</code></pre>
+<ul>
+<li class="chk"><label><input type="checkbox"><span>สตาร์ตระบบ:</span></label></li>
+</ul>
+<pre><code class="language-bash">docker compose up -d
+</code></pre>
+<ul>
+<li class="chk"><label><input type="checkbox"><span>ดู log ว่าไม่มี error:</span></label></li>
+</ul>
+<pre><code class="language-bash">docker compose logs -f --tail=100
+</code></pre>
+<hr />
+<h2 id="ขั้นที่-6-ตรวจรับระบบ">ขั้นที่ 6 — ตรวจรับระบบ</h2>
+<h3 id="6-1-ตรวจการเชื่อมต่อกล้อง">6.1 ตรวจการเชื่อมต่อกล้อง</h3>
+<ul>
+<li class="chk"><label><input type="checkbox"><span>สำรวจกล้องด้วยสคริปต์:</span></label></li>
+</ul>
+<pre><code class="language-bash">python scripts/probe_cameras.py
+</code></pre>
+<ul>
+<li class="chk"><label><input type="checkbox"><span>ทุกกล้องขึ้น <code>OK</code> มี substream และ fps ตรงตามที่ตั้ง</span></label></li>
+</ul>
+<h3 id="6-2-ตรวจการซิงก์เวลา">6.2 <span class="star">★</span> ตรวจการซิงก์เวลา</h3>
+<ul>
+<li class="chk"><label><input type="checkbox"><span>รัน:</span></label></li>
+</ul>
+<pre><code class="language-bash">python scripts/check_time_sync.py
+</code></pre>
+<ul>
+<li class="chk"><label><input type="checkbox"><span><strong>ทุกอุปกรณ์ต่างกัน &lt; 2 วินาที</strong> ถ้าไม่ผ่าน แก้ตาม <code>08-nvr-integration.md</code> หัวข้อ 7.3</span></label></li>
+</ul>
+<h3 id="6-3-ตรวจสมรรถนะ-frigate">6.3 ตรวจสมรรถนะ Frigate</h3>
+<ul>
+<li class="chk"><label><input type="checkbox"><span>เปิด <code>http://&lt;ip-เครื่อง&gt;:5000</code> เห็นภาพสดทุกกล้อง</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ตรวจ <code>http://&lt;ip-เครื่อง&gt;:5000/api/stats</code>:</span></label><ul>
+<li class="chk"><label><input type="checkbox"><span><code>inference_speed</code> &lt; 25 ms</span></label></li>
+<li class="chk"><label><input type="checkbox"><span><code>camera_fps</code> ตรงกับที่ตั้งไว้</span></label></li>
+<li class="chk"><label><input type="checkbox"><span><strong><code>skipped_fps</code> = 0</strong> (ถ้าไม่ใช่ แปลว่าเครื่องไม่ไหว)</span></label></li>
+</ul>
+</li>
+<li class="chk"><label><input type="checkbox"><span>ปล่อยทิ้งไว้ 24 ชม. แล้วตรวจซ้ำ — RTSP ต้องไม่หลุด</span></label></li>
+</ul>
+<h3 id="6-4-ตรวจ-end-to-end-กับคนจริง">6.4 <span class="star">★</span><span class="star">★</span> ตรวจ end-to-end กับคนจริง</h3>
+<blockquote>
+<p><strong>ข้อนี้สำคัญที่สุด ถ้าไม่ผ่าน ระบบไม่มีค่า</strong></p>
+</blockquote>
+<ul>
+<li class="chk"><label><input type="checkbox"><span>ให้เจ้าหน้าที่เลือกเหตุการณ์ที่รู้คำตอบอยู่แล้ว (เช่น รถของตัวเองที่เข้ามาเมื่อเช้า)</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ค้นในระบบ → ได้ผลลัพธ์พร้อมกล้อง ช่อง NVR และเวลา</span></label></li>
+<li class="chk"><label><input type="checkbox"><span><strong>เอาเวลานั้นไปเปิดใน NVR แล้วต้องเจอภาพนั้นจริง</strong></span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ทำซ้ำ 5 เหตุการณ์ ต้องผ่านทั้ง 5</span></label></li>
+</ul>
+<hr />
+<h2 id="ขั้นที่-7-ส่งมอบและอบรม-2-ชม">ขั้นที่ 7 — ส่งมอบและอบรม (~2 ชม.)</h2>
+<ul>
+<li class="chk"><label><input type="checkbox"><span>อบรมเจ้าหน้าที่ใช้หน้าค้นหา (ดูขั้นตอนใน <code>08-nvr-integration.md</code> หัวข้อ 6)</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>สอนวิธีเอา timestamp ไปเปิดใน NVR</span></label></li>
+<li class="chk"><label><input type="checkbox"><span><strong>แจ้งข้อจำกัดให้ชัดเจน</strong>:</span></label><ul>
+<li class="chk"><label><input type="checkbox"><span>ระบบเห็นเฉพาะจุดคอขวดที่ติดตั้ง ไม่เห็นภายในโกดัง</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>แจ้งรายการทางเข้า–ออกที่ <strong>ไม่ได้</strong> ติดตั้ง (จุดบอด)</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ระบบช่วยจำกัดวงค้นหา ไม่ใช่หลักฐานเด็ดขาด ต้องยืนยันด้วยวิดีโอจาก NVR เสมอ</span></label></li>
+</ul>
+</li>
+<li class="chk"><label><input type="checkbox"><span>ติดตั้ง <strong>ป้ายแจ้งเตือนการเก็บภาพและข้อมูลใบหน้า</strong> ที่จุดคอขวดทุกจุด (ข้อบังคับ PDPA — ดู <a href="06-pdpa-compliance.html"><code>06-pdpa-compliance.md</code></a>)</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ส่งมอบเอกสาร: IP/บัญชี, ผังกล้อง, ตาราง map ช่อง NVR, เช็กลิสต์ที่ติ๊กแล้ว</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ตั้ง cron ตรวจเวลาและสำรองข้อมูลรายวัน (ดู <a href="07-operations.html"><code>07-operations.md</code></a>)</span></label></li>
+</ul>
+<hr />
+<h2 id="ใบเซ็นรับมอบงาน">ใบเซ็นรับมอบงาน</h2>
+<pre><code>ผลการตรวจรับงานติดตั้ง (ขั้นที่ 4):     ☐ ผ่าน   ☐ ไม่ผ่าน
+ผลการตรวจรับระบบ (ขั้นที่ 6):           ☐ ผ่าน   ☐ ไม่ผ่าน
+ผลการทดสอบกลางคืน:                    ☐ ผ่าน   ☐ ไม่ผ่าน
+ผลการทดสอบ end-to-end กับ NVR:        ☐ ผ่าน   ☐ ไม่ผ่าน
+
+จุดบอดที่แจ้งผู้ใช้แล้ว:
+  1. ________________________________________________
+  2. ________________________________________________
+  3. ________________________________________________
+
+ปัญหาค้างที่ต้องตามแก้:
+  1. ________________________________________________
+  2. ________________________________________________
+
+
+ช่างผู้ติดตั้ง: ______________________  วันที่: __________
+
+ผู้รับมอบ (โกดัง): ____________________  วันที่: __________
+</code></pre>
+<hr />
+<h2 id="หมายเหตุสำหรับการขยายหลายไซต์">หมายเหตุสำหรับการขยายหลายไซต์</h2>
+<h3 id="ทุกไซต์ต้องเหมือนกัน">ทุกไซต์ต้องเหมือนกัน</h3>
+<ul>
+<li class="chk"><label><input type="checkbox"><span><strong>ปักหมุดเวอร์ชันทุกอย่างใน <code>.env</code></strong> (Frigate tag/digest, เวอร์ชันโมเดล)</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ห้ามแก้ <code>docker-compose.yml</code> หรือโค้ดเฉพาะไซต์ใดไซต์หนึ่ง — ถ้าจำเป็นต้องต่าง ให้ทำผ่าน <code>.env</code></span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ถ้าเจอปัญหาที่ไซต์หนึ่ง <strong>แก้ที่ต้นทางแล้ว roll out ให้ทุกไซต์</strong> อย่าแก้เฉพาะที่</span></label></li>
+</ul>
+<h3 id="ตั้งชื่อให้ไม่ซ้ำข้ามไซต์">ตั้งชื่อให้ไม่ซ้ำข้ามไซต์</h3>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>สิ่งที่ตั้งชื่อ</th>
+<th>รูปแบบ</th>
+<th>ตัวอย่าง</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ไซต์</td>
+<td><code>WH</code> + เลข 2 หลัก</td>
+<td><code>WH01</code></td>
+</tr>
+<tr>
+<td>กล้อง</td>
+<td><code>&lt;SITE_ID&gt;-&lt;จุด&gt;-&lt;บทบาท&gt;</code></td>
+<td><code>WH01-GATE-LPR</code></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="บันทึกความรู้กลับเข้าเอกสาร">บันทึกความรู้กลับเข้าเอกสาร</h3>
+<p>หลังเปิดไซต์ใหม่แต่ละครั้ง:</p>
+<ul>
+<li class="chk"><label><input type="checkbox"><span>จับเวลาว่าแต่ละขั้นใช้เวลาจริงเท่าไร</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>บันทึกปัญหาที่เจอและวิธีแก้ลงใน <a href="00-decisions.html"><code>00-decisions.md</code></a></span></label></li>
+<li class="chk"><label><input type="checkbox"><span><strong>ปรับปรุงเอกสารนี้</strong> ให้ไซต์ถัดไปเร็วขึ้น — เป้าหมายคือไซต์ที่ 3 ต้องเร็วกว่าไซต์ที่ 1 อย่างชัดเจน</span></label></li>
+</ul>
+<hr />
+<h2 id="เอกสารที่เกี่ยวข้อง">เอกสารที่เกี่ยวข้อง</h2>
+<ul>
+<li><a href="10-chokepoint-design.html"><code>10-chokepoint-design.md</code></a> — สเปกและเกณฑ์ตรวจรับจุดคอขวด</li>
+<li><a href="08-nvr-integration.html"><code>08-nvr-integration.md</code></a> — การซิงก์เวลาและเชื่อมกับ NVR</li>
+<li><a href="03-camera-onboarding.html"><code>03-camera-onboarding.md</code></a> — รายละเอียดเทคนิคการต่อกล้อง</li>
+<li><a href="06-pdpa-compliance.html"><code>06-pdpa-compliance.md</code></a> — ข้อบังคับด้านกฎหมาย</li>
+<li><a href="07-operations.html"><code>07-operations.md</code></a> — การดูแลระบบหลังส่งมอบ</li>
+</ul>
+
+<button class="checks-reset" type="button">ล้างเครื่องหมายทั้งหมด</button>
+
+  </main>
+</div>
+<script>
+(function () {
+  "use strict";
+  var KEY = "docs-checks-" + (document.body.getAttribute("data-doc") || "x");
+  var boxes = Array.prototype.slice.call(document.querySelectorAll("li.chk input"));
+  var saved = {};
+  try { saved = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { saved = {}; }
+  boxes.forEach(function (box, i) {
+    if (saved[i]) box.checked = true;
+    box.addEventListener("change", function () {
+      saved[i] = box.checked;
+      try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch (e) {}
+    });
+  });
+  var reset = document.querySelector(".checks-reset");
+  if (reset) reset.addEventListener("click", function () {
+    boxes.forEach(function (b) { b.checked = false; });
+    saved = {};
+    try { localStorage.removeItem(KEY); } catch (e) {}
+  });
+
+  var links = {};
+  Array.prototype.forEach.call(document.querySelectorAll(".toc a"), function (a) {
+    links[a.getAttribute("href").slice(1)] = a;
+  });
+  var heads = document.querySelectorAll(".main h2");
+  if (!heads.length || !window.IntersectionObserver) return;
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      var link = links[e.target.id];
+      if (!link || !e.isIntersecting) return;
+      Object.keys(links).forEach(function (k) { links[k].classList.remove("is-active"); });
+      link.classList.add("is-active");
+    });
+  }, { rootMargin: "-8% 0px -80% 0px" });
+  Array.prototype.forEach.call(heads, function (h) { io.observe(h); });
+})();
+</script>
+</body>
+</html>

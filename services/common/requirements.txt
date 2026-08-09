@@ -1,0 +1,8 @@
+# Dependency ที่ services/common/db และ db/migrations ต้องใช้
+# indexer และ api จะมี requirements.txt ของตัวเองเพิ่มเติม (โมเดล AI, FastAPI,
+# MQTT client ฯลฯ) เมื่อเขียนถึงเฟสนั้น — ไฟล์นี้ครอบคลุมแค่ชั้น DB ที่ใช้ร่วมกัน
+
+sqlalchemy>=2.0,<3.0
+alembic>=1.13,<2.0
+pgvector>=0.3,<1.0
+psycopg[binary]>=3.1,<4.0

@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>เอกสารระบบดัชนีสืบค้นภาพจากกล้องวงจรปิด</title>
+<style>
+:root {
+  --ground:#F5F4F2; --surface:#FFFFFF; --surface-2:#EEECE8;
+  --ink:#191714; --ink-2:#57524B; --ink-3:#8A837A;
+  --rule:#DEDAD4; --rule-strong:#C4BEB5;
+  --accent:#A66A00; --accent-ink:#7A4E00; --accent-wash:#F8F0DE;
+  --pass:#216B45; --pass-wash:#E4F0E9; --fail:#A32219; --fail-wash:#F8E6E4;
+  --shadow:0 1px 2px rgba(25,23,20,.05), 0 8px 24px -16px rgba(25,23,20,.28);
+  --font-th:"Leelawadee UI","Noto Sans Thai","Thonburi","Sarabun","Segoe UI",Tahoma,system-ui,sans-serif;
+  --font-mono:ui-monospace,"SF Mono","Cascadia Mono","Segoe UI Mono","Roboto Mono",Menlo,Consolas,monospace;
+  --measure:70ch; --rail:16rem;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground:#141210; --surface:#1C1917; --surface-2:#24201C;
+    --ink:#EFEAE2; --ink-2:#ADA49A; --ink-3:#7C736A;
+    --rule:#332D27; --rule-strong:#4A423A;
+    --accent:#E0A648; --accent-ink:#EFC077; --accent-wash:#2C2313;
+    --pass:#5FBF8C; --pass-wash:#16301F; --fail:#E5796C; --fail-wash:#331A17;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"] {
+  --ground:#141210; --surface:#1C1917; --surface-2:#24201C;
+  --ink:#EFEAE2; --ink-2:#ADA49A; --ink-3:#7C736A;
+  --rule:#332D27; --rule-strong:#4A423A;
+  --accent:#E0A648; --accent-ink:#EFC077; --accent-wash:#2C2313;
+  --pass:#5FBF8C; --pass-wash:#16301F; --fail:#E5796C; --fail-wash:#331A17;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+}
+:root[data-theme="light"] {
+  --ground:#F5F4F2; --surface:#FFFFFF; --surface-2:#EEECE8;
+  --ink:#191714; --ink-2:#57524B; --ink-3:#8A837A;
+  --rule:#DEDAD4; --rule-strong:#C4BEB5;
+  --accent:#A66A00; --accent-ink:#7A4E00; --accent-wash:#F8F0DE;
+  --pass:#216B45; --pass-wash:#E4F0E9; --fail:#A32219; --fail-wash:#F8E6E4;
+  --shadow:0 1px 2px rgba(25,23,20,.05), 0 8px 24px -16px rgba(25,23,20,.28);
+}
+
+* { box-sizing:border-box; }
+body {
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:var(--font-th); font-size:16.5px; line-height:1.85;
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+}
+:where(a){ color:var(--accent-ink); text-decoration-color:color-mix(in srgb, var(--accent) 40%, transparent); text-underline-offset:.22em; }
+:where(a):hover{ text-decoration-color:var(--accent); }
+:where(a,button,input,summary):focus-visible{ outline:2px solid var(--accent); outline-offset:3px; border-radius:3px; }
+
+.page{ display:grid; grid-template-columns:var(--rail) minmax(0,1fr); gap:3.5rem;
+       max-width:78rem; margin:0 auto; padding:0 2rem 6rem; align-items:start; }
+.main{ min-width:0; max-width:var(--measure); }
+@media (max-width:60rem){ .page{ grid-template-columns:minmax(0,1fr); gap:0; padding:0 1.15rem 4rem; } .main{ max-width:none; } }
+
+.masthead{ grid-column:1/-1; border-bottom:1px solid var(--rule);
+           padding:3.5rem 0 2rem; margin-bottom:2.5rem; display:flex; flex-direction:column; gap:.9rem; }
+.masthead__kicker{ font-family:var(--font-mono); font-size:.72rem; letter-spacing:.14em;
+                   text-transform:uppercase; color:var(--ink-3); display:flex; flex-wrap:wrap; gap:.55rem .9rem; align-items:center; }
+.masthead__kicker b{ color:var(--accent-ink); font-weight:600; }
+.masthead__kicker a{ color:var(--ink-3); text-decoration:none; }
+.masthead__kicker a:hover{ color:var(--accent-ink); }
+.masthead h1{ margin:0; font-size:clamp(1.8rem,1.2rem + 2.2vw,2.5rem); line-height:1.35;
+              font-weight:700; letter-spacing:-.005em; text-wrap:balance; }
+.masthead__sub{ margin:0; max-width:56ch; color:var(--ink-2); font-size:1.02rem; }
+
+.toc{ position:sticky; top:2rem; font-size:.875rem; line-height:1.6;
+      border-left:1px solid var(--rule); padding-left:1.1rem; }
+.toc__label{ font-family:var(--font-mono); font-size:.68rem; letter-spacing:.14em;
+             text-transform:uppercase; color:var(--ink-3); margin-bottom:.85rem; }
+.toc ol{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:.1rem; }
+.toc li{ margin:0; }
+.toc a{ display:block; padding:.3rem 0; color:var(--ink-2); text-decoration:none; border-radius:2px; }
+.toc a:hover{ color:var(--ink); }
+.toc a.is-active{ color:var(--accent-ink); font-weight:600; }
+@media (max-width:60rem){
+  .toc{ position:static; border-left:0; border:1px solid var(--rule); border-radius:3px;
+        background:var(--surface); padding:1rem 1.1rem; margin-bottom:2.5rem; }
+  .toc ol{ columns:2; column-gap:1.5rem; }
+  .toc li{ break-inside:avoid; }
+}
+
+h2{ margin:3.4rem 0 1.5rem; padding-bottom:.55rem; border-bottom:2px solid var(--ink);
+    font-size:clamp(1.25rem,1.1rem + .7vw,1.5rem); line-height:1.4; font-weight:700;
+    text-wrap:balance; scroll-margin-top:1.5rem; }
+.main > h2:first-child{ margin-top:0; }
+h3{ margin:2.6rem 0 .9rem; font-size:1.06rem; font-weight:700; line-height:1.5; scroll-margin-top:1.5rem; }
+h4{ margin:1.9rem 0 .6rem; font-size:.95rem; font-weight:700; color:var(--ink-2); }
+p{ margin:0 0 1rem; }
+strong{ font-weight:700; }
+ul,ol{ margin:0 0 1.1rem; padding-left:1.35rem; }
+li{ margin-bottom:.4rem; }
+li:last-child{ margin-bottom:0; }
+li > ul, li > ol { margin-top:.4rem; }
+hr{ border:0; border-top:1px solid var(--rule); margin:2.5rem 0; }
+
+/* ★ ในต้นฉบับ = ระดับความสำคัญ */
+.star{ color:var(--accent); font-size:.9em; }
+
+blockquote{ margin:1.4rem 0; padding:.1rem 0 .1rem 1.1rem;
+            border-left:3px solid var(--rule-strong); color:var(--ink-2); font-size:.96rem; }
+blockquote strong{ color:var(--ink); }
+blockquote > :last-child{ margin-bottom:0; }
+/* blockquote ที่ขึ้นต้นด้วย ★ = คำเตือนสำคัญ */
+blockquote.is-flag{ background:var(--surface); border:1px solid var(--rule);
+                    border-left:4px solid var(--accent); border-radius:2px;
+                    padding:1.05rem 1.25rem; box-shadow:var(--shadow); color:var(--ink); }
+
+.tw{ overflow-x:auto; margin:1.4rem 0; border:1px solid var(--rule); border-radius:3px;
+     background:var(--surface); -webkit-overflow-scrolling:touch; }
+table{ border-collapse:collapse; width:100%; font-size:.93rem; line-height:1.65;
+       font-variant-numeric:tabular-nums; }
+thead th{ background:var(--surface-2); text-align:left; font-weight:700; font-size:.8rem;
+          color:var(--ink-2); padding:.6rem .85rem; border-bottom:1px solid var(--rule-strong); white-space:nowrap; }
+td{ padding:.62rem .85rem; border-bottom:1px solid var(--rule); vertical-align:top; text-align:left; }
+tbody tr:last-child td{ border-bottom:0; }
+td:empty{ min-width:4rem; }
+
+code{ font-family:var(--font-mono); font-size:.875em; background:var(--surface-2);
+      padding:.1em .38em; border-radius:2px; }
+pre{ font-family:var(--font-mono); font-size:.85rem; line-height:1.7; background:var(--surface);
+     border:1px solid var(--rule); border-radius:3px; padding:1rem 1.15rem; margin:1.3rem 0;
+     overflow-x:auto; color:var(--ink); font-variant-numeric:tabular-nums; }
+pre code{ background:none; padding:0; font-size:1em; white-space:pre; }
+
+/* เช็กลิสต์ติ๊กได้ จำสถานะไว้ — ใช้ li.chk เพื่อรองรับรายการซ้อนชั้น */
+ul:has(> li.chk){ list-style:none; margin:1.1rem 0 1.5rem; padding:0; }
+li.chk > ul{ margin:.3rem 0 .5rem 1.8rem; }
+li.chk{ margin:0; }
+li.chk > label{ display:flex; gap:.7rem; align-items:flex-start; padding:.5rem .7rem;
+                border-radius:3px; cursor:pointer; transition:background .12s ease; }
+li.chk > label:hover{ background:var(--surface-2); }
+li.chk input{ appearance:none; flex:0 0 auto; width:1.05rem; height:1.05rem; margin:.38rem 0 0;
+              border:1.5px solid var(--rule-strong); border-radius:2px; background:var(--surface);
+              cursor:pointer; position:relative; }
+li.chk input:checked{ background:var(--pass); border-color:var(--pass); }
+li.chk input:checked::after{ content:""; position:absolute; left:5px; top:1px; width:4px; height:9px;
+                             border:solid var(--surface); border-width:0 2px 2px 0; transform:rotate(42deg); }
+li.chk input:checked + span{ color:var(--ink-3); text-decoration:line-through; text-decoration-thickness:1px; }
+li.chk > label > span{ flex:1; }
+.checks-reset{ font-family:var(--font-mono); font-size:.72rem; letter-spacing:.06em; background:none;
+               border:1px solid var(--rule); border-radius:2px; color:var(--ink-3);
+               padding:.3rem .65rem; cursor:pointer; margin:.4rem 0 1.5rem; display:inline-block; }
+.checks-reset:hover{ color:var(--ink); border-color:var(--rule-strong); }
+
+/* หน้า index */
+.cards{ list-style:none; padding:0; margin:0; display:grid; gap:.65rem; }
+.cards li{ margin:0; }
+.cards a{ display:flex; gap:1rem; align-items:baseline; text-decoration:none; color:inherit;
+          background:var(--surface); border:1px solid var(--rule); border-radius:3px;
+          padding:.9rem 1.1rem; transition:border-color .12s ease, transform .12s ease; }
+.cards a:hover{ border-color:var(--accent); transform:translateX(2px); }
+.cards .n{ font-family:var(--font-mono); font-size:.85rem; color:var(--ink-3); font-variant-numeric:tabular-nums; }
+.cards .t{ font-weight:700; display:block; margin-bottom:.1rem; }
+.cards .d{ color:var(--ink-2); font-size:.92rem; display:block; line-height:1.6; }
+.cards .is-key .t{ color:var(--accent-ink); }
+.cards a.is-key{ border-left:3px solid var(--accent); }
+
+@media print{
+  :root{ --ground:#fff; --surface:#fff; --surface-2:#f2f2f2; --ink:#000; --ink-2:#333; --ink-3:#666;
+         --rule:#bbb; --rule-strong:#888; --accent:#000; --accent-ink:#000; --accent-wash:#f4f4f4; --shadow:none; }
+  body{ font-size:10.5pt; line-height:1.65; }
+  .toc,.checks-reset{ display:none; }
+  .page{ display:block; max-width:none; padding:0; }
+  h2,h3,h4{ page-break-after:avoid; }
+  .tw,pre,blockquote{ page-break-inside:avoid; }
+  a{ text-decoration:none; color:#000; }
+}
+@media (prefers-reduced-motion: reduce){ *{ animation:none !important; transition:none !important; scroll-behavior:auto !important; } }
+html{ scroll-behavior:smooth; }
+
+.cards a.is-key{border-left:3px solid var(--accent);}</style>
+</head>
+<body data-doc="index">
+<div class="page">
+  <header class="masthead">
+    <div class="masthead__kicker">
+      <span>ระบบดัชนีสืบค้นภาพจากกล้องวงจรปิด</span><span>·</span><b>เอกสารทั้งหมด</b>
+    </div>
+    <h1>เอกสารโครงการ</h1>
+    <p class="masthead__sub">ระบบช่วยจำกัดวงการค้นหาสำหรับโกดังที่มี NVR อยู่แล้ว วิเคราะห์ภาพจากกล้องจุดคอขวดเพื่อบอกว่าใครหรืออะไรผ่านเข้า–ออกเมื่อไร</p>
+  </header>
+  
+  <main class="main">
+<ul class="cards">
+      <li><a class="cards-a" href="00-decisions.html"><span class="n">00</span><span><span class="t">บันทึกการตัดสินใจ</span><span class="d">บันทึกการตัดสินใจ (ADR) และสิ่งที่ยังไม่ตัดสินใจ</span></span></a></li>
+      <li><a class="cards-a" href="01-architecture.html"><span class="n">01</span><span><span class="t">สถาปัตยกรรมระบบ</span><span class="d">สถาปัตยกรรมระบบและเหตุผลของแต่ละทางเลือก</span></span></a></li>
+      <li><a class="cards-a" href="02-hardware-sizing.html"><span class="n">02</span><span><span class="t">จัดขนาดเครื่องและพื้นที่</span><span class="d">เลือกเครื่อง และสูตรคำนวณพื้นที่จัดเก็บ</span></span></a></li>
+      <li><a class="cards-a" href="03-camera-onboarding.html"><span class="n">03</span><span><span class="t">การนำกล้องเข้าระบบ</span><span class="d">เทคนิคการต่อกล้อง Dahua/ONVIF และกับดักที่พบบ่อย</span></span></a></li>
+      <li><a class="cards-a" href="04-data-model.html"><span class="n">04</span><span><span class="t">โครงสร้างฐานข้อมูล</span><span class="d">โครงสร้างฐานข้อมูล index และคิวรีตัวอย่าง</span></span></a></li>
+      <li><a class="cards-a is-key" href="05-thai-lpr.html"><span class="n">05</span><span><span class="t">การอ่านป้ายทะเบียนไทย</span><span class="d">ป้ายทะเบียนไทย รูปแบบ ตารางอักษรสับสน 77 จังหวัด</span></span></a></li>
+      <li><a class="cards-a" href="06-pdpa-compliance.html"><span class="n">06</span><span><span class="t">การปฏิบัติตาม PDPA</span><span class="d">หน้าที่ตามกฎหมาย และการควบคุมทางเทคนิค</span></span></a></li>
+      <li><a class="cards-a" href="07-operations.html"><span class="n">07</span><span><span class="t">การดูแลระบบ</span><span class="d">เฝ้าระวัง สำรองข้อมูล และแก้ปัญหา</span></span></a></li>
+      <li><a class="cards-a is-key" href="08-nvr-integration.html"><span class="n">08</span><span><span class="t">การเชื่อมต่อกับ NVR</span><span class="d">การซิงก์เวลา และขั้นตอนของเจ้าหน้าที่</span></span></a></li>
+      <li><a class="cards-a is-key" href="09-multi-site-runbook.html"><span class="n">09</span><span><span class="t">Runbook เปิดโกดังใหม่</span><span class="d">เช็กลิสต์เปิดโกดังใหม่ตั้งแต่สำรวจถึงส่งมอบ</span></span></a></li>
+      <li><a class="cards-a is-key" href="10-chokepoint-design.html"><span class="n">10</span><span><span class="t">การออกแบบจุดคอขวด</span><span class="d">สเปกกล้อง ไฟส่องสว่าง และเกณฑ์ตรวจรับงานติดตั้ง</span></span></a></li>
+    </ul>
+<p style="margin-top:2rem;color:var(--ink-2);font-size:.95rem">เล่มที่ขีดเส้นสีไว้คือเล่มที่มีผลต่อความสำเร็จมากที่สุด ช่างติดตั้งอ่านเล่ม <a href="10-chokepoint-design.html">10</a> ก่อน</p>
+  </main>
+</div>
+<script>
+(function () {
+  "use strict";
+  var KEY = "docs-checks-" + (document.body.getAttribute("data-doc") || "x");
+  var boxes = Array.prototype.slice.call(document.querySelectorAll("li.chk input"));
+  var saved = {};
+  try { saved = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { saved = {}; }
+  boxes.forEach(function (box, i) {
+    if (saved[i]) box.checked = true;
+    box.addEventListener("change", function () {
+      saved[i] = box.checked;
+      try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch (e) {}
+    });
+  });
+  var reset = document.querySelector(".checks-reset");
+  if (reset) reset.addEventListener("click", function () {
+    boxes.forEach(function (b) { b.checked = false; });
+    saved = {};
+    try { localStorage.removeItem(KEY); } catch (e) {}
+  });
+
+  var links = {};
+  Array.prototype.forEach.call(document.querySelectorAll(".toc a"), function (a) {
+    links[a.getAttribute("href").slice(1)] = a;
+  });
+  var heads = document.querySelectorAll(".main h2");
+  if (!heads.length || !window.IntersectionObserver) return;
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      var link = links[e.target.id];
+      if (!link || !e.isIntersecting) return;
+      Object.keys(links).forEach(function (k) { links[k].classList.remove("is-active"); });
+      link.classList.add("is-active");
+    });
+  }, { rootMargin: "-8% 0px -80% 0px" });
+  Array.prototype.forEach.call(heads, function (h) { io.observe(h); });
+})();
+</script>
+</body>
+</html>

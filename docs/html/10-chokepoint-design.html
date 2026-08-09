@@ -1,0 +1,1304 @@
+<title>การออกแบบจุดคอขวด — คู่มือติดตั้งหน้างาน</title>
+
+<style>
+/* ============================================================
+   TOKENS
+   สีวางรากจากตัวงาน: ไฟส่องสว่างที่ประตูตอนกลางคืน (อำพัน)
+   สีความหมาย ผ่าน/ไม่ผ่าน แยกจากสีเน้น เพราะเอกสารนี้คือเกณฑ์ตรวจรับ
+   ============================================================ */
+:root {
+  --ground:      #F5F4F2;
+  --surface:     #FFFFFF;
+  --surface-2:   #EEECE8;
+  --ink:         #191714;
+  --ink-2:       #57524B;
+  --ink-3:       #8A837A;
+  --rule:        #DEDAD4;
+  --rule-strong: #C4BEB5;
+
+  --accent:      #A66A00;
+  --accent-ink:  #7A4E00;
+  --accent-wash: #F8F0DE;
+
+  --pass:        #216B45;
+  --pass-wash:   #E4F0E9;
+  --fail:        #A32219;
+  --fail-wash:   #F8E6E4;
+
+  --shadow: 0 1px 2px rgba(25,23,20,.05), 0 8px 24px -16px rgba(25,23,20,.28);
+
+  --font-th: "Leelawadee UI", "Noto Sans Thai", "Thonburi", "Sarabun",
+             "Segoe UI", Tahoma, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "Segoe UI Mono",
+               "Roboto Mono", Menlo, Consolas, monospace;
+
+  --measure: 68ch;
+  --rail: 16rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground:      #141210;
+    --surface:     #1C1917;
+    --surface-2:   #24201C;
+    --ink:         #EFEAE2;
+    --ink-2:       #ADA49A;
+    --ink-3:       #7C736A;
+    --rule:        #332D27;
+    --rule-strong: #4A423A;
+
+    --accent:      #E0A648;
+    --accent-ink:  #EFC077;
+    --accent-wash: #2C2313;
+
+    --pass:        #5FBF8C;
+    --pass-wash:   #16301F;
+    --fail:        #E5796C;
+    --fail-wash:   #331A17;
+
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+  }
+}
+
+/* การสลับธีมด้วยมือต้องชนะ media query ทั้งสองทาง */
+:root[data-theme="dark"] {
+  --ground:      #141210;
+  --surface:     #1C1917;
+  --surface-2:   #24201C;
+  --ink:         #EFEAE2;
+  --ink-2:       #ADA49A;
+  --ink-3:       #7C736A;
+  --rule:        #332D27;
+  --rule-strong: #4A423A;
+  --accent:      #E0A648;
+  --accent-ink:  #EFC077;
+  --accent-wash: #2C2313;
+  --pass:        #5FBF8C;
+  --pass-wash:   #16301F;
+  --fail:        #E5796C;
+  --fail-wash:   #331A17;
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+}
+:root[data-theme="light"] {
+  --ground:      #F5F4F2;
+  --surface:     #FFFFFF;
+  --surface-2:   #EEECE8;
+  --ink:         #191714;
+  --ink-2:       #57524B;
+  --ink-3:       #8A837A;
+  --rule:        #DEDAD4;
+  --rule-strong: #C4BEB5;
+  --accent:      #A66A00;
+  --accent-ink:  #7A4E00;
+  --accent-wash: #F8F0DE;
+  --pass:        #216B45;
+  --pass-wash:   #E4F0E9;
+  --fail:        #A32219;
+  --fail-wash:   #F8E6E4;
+  --shadow: 0 1px 2px rgba(25,23,20,.05), 0 8px 24px -16px rgba(25,23,20,.28);
+}
+
+/* ============================================================
+   BASE
+   ============================================================ */
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--font-th);
+  font-size: 16.5px;
+  line-height: 1.85;          /* ไทยมีสระบน-ล่าง ต้องการที่มากกว่าละติน */
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+:where(a) {
+  color: var(--accent-ink);
+  text-decoration-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  text-underline-offset: .22em;
+}
+:where(a):hover { text-decoration-color: var(--accent); }
+
+:where(a, button, input, summary):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+
+/* ============================================================
+   LAYOUT
+   ============================================================ */
+.page {
+  display: grid;
+  grid-template-columns: var(--rail) minmax(0, 1fr);
+  gap: 3.5rem;
+  max-width: 78rem;
+  margin: 0 auto;
+  padding: 0 2rem 6rem;
+  align-items: start;
+}
+.main { min-width: 0; max-width: var(--measure); }
+
+@media (max-width: 60rem) {
+  .page { grid-template-columns: minmax(0, 1fr); gap: 0; padding: 0 1.15rem 4rem; }
+  .main { max-width: none; }
+}
+
+/* ============================================================
+   MASTHEAD
+   ============================================================ */
+.masthead {
+  grid-column: 1 / -1;
+  border-bottom: 1px solid var(--rule);
+  padding: 3.5rem 0 2rem;
+  margin-bottom: 2.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: .9rem;
+}
+.masthead__kicker {
+  font-family: var(--font-mono);
+  font-size: .72rem;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  display: flex;
+  flex-wrap: wrap;
+  gap: .55rem .9rem;
+  align-items: center;
+}
+.masthead__kicker b { color: var(--accent-ink); font-weight: 600; }
+.masthead h1 {
+  margin: 0;
+  font-size: clamp(1.85rem, 1.2rem + 2.4vw, 2.7rem);
+  line-height: 1.35;
+  font-weight: 700;
+  letter-spacing: -.005em;
+  text-wrap: balance;
+}
+.masthead__sub {
+  margin: 0;
+  max-width: 52ch;
+  color: var(--ink-2);
+  font-size: 1.02rem;
+}
+
+/* ธงเปิดเรื่อง — คำเตือนหลักของเอกสาร */
+.banner {
+  grid-column: 1 / -1;
+  background: var(--accent-wash);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-left: 4px solid var(--accent);
+  border-radius: 2px;
+  padding: 1.35rem 1.5rem;
+  margin-bottom: 3rem;
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+}
+.banner__title {
+  font-weight: 700;
+  font-size: 1.02rem;
+  color: var(--accent-ink);
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+.banner p { margin: 0; color: var(--ink); }
+.banner p:last-child { color: var(--ink-2); }
+
+/* ============================================================
+   TOC RAIL
+   ============================================================ */
+.toc {
+  position: sticky;
+  top: 2rem;
+  font-size: .875rem;
+  line-height: 1.6;
+  border-left: 1px solid var(--rule);
+  padding-left: 1.1rem;
+}
+.toc__label {
+  font-family: var(--font-mono);
+  font-size: .68rem;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: .85rem;
+}
+.toc ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .1rem; }
+.toc a {
+  display: flex;
+  gap: .6rem;
+  padding: .3rem 0;
+  color: var(--ink-2);
+  text-decoration: none;
+  border-radius: 2px;
+}
+.toc a:hover { color: var(--ink); }
+.toc a.is-active { color: var(--accent-ink); font-weight: 600; }
+.toc__num {
+  font-family: var(--font-mono);
+  font-size: .78rem;
+  color: var(--ink-3);
+  min-width: 1.1em;
+  font-variant-numeric: tabular-nums;
+}
+.toc a.is-active .toc__num { color: var(--accent); }
+
+@media (max-width: 60rem) {
+  .toc {
+    position: static;
+    border-left: 0;
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    background: var(--surface);
+    padding: 1rem 1.1rem;
+    margin-bottom: 2.5rem;
+  }
+  .toc ol { columns: 2; column-gap: 1.5rem; }
+  .toc li { break-inside: avoid; }
+}
+
+/* ============================================================
+   SECTIONS
+   ============================================================ */
+.sec { margin-bottom: 4.5rem; scroll-margin-top: 1.5rem; }
+
+.sec__head {
+  display: flex;
+  gap: .85rem;
+  align-items: baseline;
+  border-bottom: 2px solid var(--ink);
+  padding-bottom: .55rem;
+  margin-bottom: 1.6rem;
+}
+.sec__num {
+  font-family: var(--font-mono);
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.sec__head h2 {
+  margin: 0;
+  font-size: clamp(1.28rem, 1.1rem + .7vw, 1.55rem);
+  line-height: 1.4;
+  font-weight: 700;
+  text-wrap: balance;
+}
+
+h3 {
+  margin: 2.6rem 0 .9rem;
+  font-size: 1.06rem;
+  font-weight: 700;
+  line-height: 1.5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .55rem;
+  scroll-margin-top: 1.5rem;
+}
+h3 .h3num {
+  font-family: var(--font-mono);
+  font-size: .85rem;
+  color: var(--ink-3);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+h4 {
+  margin: 1.9rem 0 .6rem;
+  font-size: .95rem;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+
+p { margin: 0 0 1rem; }
+.main > .sec p:last-child { margin-bottom: 0; }
+
+strong { font-weight: 700; }
+
+ul, ol { margin: 0 0 1.1rem; padding-left: 1.35rem; }
+li { margin-bottom: .4rem; }
+li:last-child { margin-bottom: 0; }
+
+/* ============================================================
+   ป้ายระดับความสำคัญ — แปลงจาก ★ / ★★ / ★★★ ในต้นฉบับ
+   เป็นข้อมูลที่อ่านออกได้จริง ไม่ใช่เครื่องประดับ
+   ============================================================ */
+.crit {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  font-family: var(--font-mono);
+  font-size: .64rem;
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  padding: .18rem .5rem;
+  border-radius: 2px;
+  white-space: nowrap;
+  background: var(--accent-wash);
+  color: var(--accent-ink);
+  border: 1px solid color-mix(in srgb, var(--accent) 32%, transparent);
+}
+.crit--max {
+  background: var(--accent);
+  color: var(--ground);
+  border-color: var(--accent);
+}
+
+/* ============================================================
+   CALLOUTS
+   ============================================================ */
+.note {
+  border-left: 3px solid var(--rule-strong);
+  padding: .1rem 0 .1rem 1.1rem;
+  margin: 1.4rem 0;
+  color: var(--ink-2);
+  font-size: .96rem;
+}
+.note strong { color: var(--ink); }
+
+.flag {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-left: 4px solid var(--accent);
+  border-radius: 2px;
+  padding: 1.05rem 1.25rem;
+  margin: 1.5rem 0;
+  box-shadow: var(--shadow);
+}
+.flag > :first-child { margin-top: 0; }
+.flag > :last-child { margin-bottom: 0; }
+.flag__title {
+  font-weight: 700;
+  margin-bottom: .45rem;
+  color: var(--accent-ink);
+}
+
+.flag--stop { border-left-color: var(--fail); background: var(--fail-wash); }
+.flag--stop .flag__title { color: var(--fail); }
+
+/* ============================================================
+   TABLES
+   ============================================================ */
+.tw {
+  overflow-x: auto;
+  margin: 1.4rem 0;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  background: var(--surface);
+  -webkit-overflow-scrolling: touch;
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: .93rem;
+  line-height: 1.65;
+}
+thead th {
+  background: var(--surface-2);
+  text-align: right;
+  font-weight: 700;
+  font-size: .8rem;
+  letter-spacing: .02em;
+  color: var(--ink-2);
+  padding: .6rem .85rem;
+  border-bottom: 1px solid var(--rule-strong);
+  white-space: nowrap;
+}
+thead th:first-child { text-align: left; }
+td {
+  padding: .62rem .85rem;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+  text-align: right;
+}
+td:first-child { text-align: left; }
+tbody tr:last-child td { border-bottom: 0; }
+tbody tr.is-hero td {
+  background: var(--accent-wash);
+  font-weight: 600;
+}
+tbody tr.is-bad td { color: var(--fail); }
+tbody tr.is-bad td:first-child { color: var(--fail); }
+
+/* ตารางที่ทุกคอลัมน์เป็นข้อความยาว ให้ชิดซ้ายหมด */
+table.t-prose th, table.t-prose td { text-align: left; }
+
+/* ============================================================
+   ค่าที่ต้องวัด — ใช้ mono + tabular-nums ให้เทียบกันได้
+   นี่คือแก่นของเอกสาร ตัวเลขต้องอ่านง่ายที่สุด
+   ============================================================ */
+.v {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: .92em;
+  white-space: nowrap;
+}
+.v--key {
+  font-weight: 600;
+  color: var(--accent-ink);
+  background: var(--accent-wash);
+  padding: .08em .38em;
+  border-radius: 2px;
+}
+.v--pass { color: var(--pass); font-weight: 600; }
+.v--fail { color: var(--fail); font-weight: 600; }
+
+code {
+  font-family: var(--font-mono);
+  font-size: .875em;
+  background: var(--surface-2);
+  padding: .1em .38em;
+  border-radius: 2px;
+  white-space: nowrap;
+}
+
+/* ============================================================
+   สูตรคำนวณ
+   ============================================================ */
+.formula {
+  font-family: var(--font-mono);
+  font-size: .9rem;
+  line-height: 1.7;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 1rem 1.15rem;
+  margin: 1.3rem 0;
+  overflow-x: auto;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.formula b { color: var(--accent-ink); font-weight: 600; }
+
+/* ============================================================
+   แผนผังการวางกล้อง
+   ============================================================ */
+.diagram {
+  margin: 1.6rem 0;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 1.25rem 1rem .9rem;
+  overflow-x: auto;
+}
+.diagram svg { display: block; width: 100%; min-width: 30rem; height: auto; }
+/* CSS variable ใช้ใน presentation attribute ของ SVG ไม่ได้ ต้องกำหนดผ่าน CSS */
+.diagram text { font-family: var(--font-mono); font-size: 12px; fill: var(--ink-2); }
+.diagram .d-dim { font-size: 11.5px; fill: var(--ink-3); }
+.diagram .d-key { fill: var(--accent-ink); font-weight: 600; }
+.diagram .d-arrow { fill: var(--ink-3); }
+.diagram figcaption {
+  font-size: .84rem;
+  color: var(--ink-3);
+  margin-top: .7rem;
+  text-align: center;
+}
+
+/* ============================================================
+   เช็กลิสต์ — ติ๊กได้จริง และจำสถานะไว้ตอนเดินสำรวจหน้างาน
+   ============================================================ */
+.checks {
+  list-style: none;
+  margin: 1.1rem 0 1.5rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: .1rem;
+}
+.checks li { margin: 0; }
+.checks label {
+  display: flex;
+  gap: .7rem;
+  align-items: flex-start;
+  padding: .5rem .7rem;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background .12s ease;
+}
+.checks label:hover { background: var(--surface-2); }
+.checks input {
+  appearance: none;
+  flex: 0 0 auto;
+  width: 1.05rem;
+  height: 1.05rem;
+  margin: .38rem 0 0;
+  border: 1.5px solid var(--rule-strong);
+  border-radius: 2px;
+  background: var(--surface);
+  cursor: pointer;
+  position: relative;
+}
+.checks input:checked {
+  background: var(--pass);
+  border-color: var(--pass);
+}
+.checks input:checked::after {
+  content: "";
+  position: absolute;
+  left: 5px; top: 1px;
+  width: 4px; height: 9px;
+  border: solid var(--surface);
+  border-width: 0 2px 2px 0;
+  transform: rotate(42deg);
+}
+.checks input:checked + span { color: var(--ink-3); text-decoration: line-through; text-decoration-thickness: 1px; }
+.checks span { flex: 1; }
+
+.checks__reset {
+  font-family: var(--font-mono);
+  font-size: .72rem;
+  letter-spacing: .06em;
+  background: none;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  color: var(--ink-3);
+  padding: .3rem .65rem;
+  cursor: pointer;
+  align-self: flex-start;
+  margin-top: .5rem;
+}
+.checks__reset:hover { color: var(--ink); border-color: var(--rule-strong); }
+
+/* ============================================================
+   แบบสำรวจ — ต้องปรินต์ไปกรอกหน้างาน
+   ============================================================ */
+.survey {
+  font-family: var(--font-mono);
+  font-size: .82rem;
+  line-height: 2.15;
+  background: var(--surface);
+  border: 1px solid var(--rule-strong);
+  border-radius: 3px;
+  padding: 1.35rem 1.4rem;
+  margin: 1.4rem 0;
+  overflow-x: auto;
+  white-space: pre;
+  color: var(--ink);
+}
+.survey .grp {
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+/* ============================================================
+   สรุปงบ
+   ============================================================ */
+.total td {
+  border-top: 2px solid var(--ink);
+  font-weight: 700;
+  font-size: 1rem;
+  background: var(--surface-2);
+}
+
+/* ============================================================
+   FOOTER
+   ============================================================ */
+.foot {
+  grid-column: 1 / -1;
+  border-top: 1px solid var(--rule);
+  padding-top: 1.8rem;
+  margin-top: 1rem;
+  font-size: .93rem;
+  color: var(--ink-2);
+}
+.foot h2 { font-size: 1rem; margin: 0 0 .9rem; }
+.foot ul { list-style: none; padding: 0; display: flex; flex-direction: column; gap: .5rem; }
+.foot code { background: none; padding: 0; color: var(--accent-ink); }
+
+/* ============================================================
+   PRINT — ช่างต้องปรินต์แบบสำรวจไปกรอกหน้างาน
+   ============================================================ */
+@media print {
+  :root {
+    --ground: #fff; --surface: #fff; --surface-2: #f2f2f2;
+    --ink: #000; --ink-2: #333; --ink-3: #666;
+    --rule: #bbb; --rule-strong: #888;
+    --accent: #000; --accent-ink: #000; --accent-wash: #f4f4f4;
+    --shadow: none;
+  }
+  body { font-size: 10.5pt; line-height: 1.65; }
+  .toc, .checks__reset { display: none; }
+  .page { display: block; max-width: none; padding: 0; }
+  .sec { margin-bottom: 2rem; page-break-inside: auto; }
+  .sec__head, h3, h4 { page-break-after: avoid; }
+  .tw, .survey, .diagram, .flag, .formula { page-break-inside: avoid; }
+  .banner { border: 1.5pt solid #000; }
+  a { text-decoration: none; color: #000; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+html { scroll-behavior: smooth; }
+</style>
+
+
+<div class="page">
+
+  <header class="masthead">
+    <div class="masthead__kicker">
+      <span>เอกสาร 10</span>
+      <span>·</span>
+      <span>ระบบดัชนีสืบค้นภาพจากกล้องวงจรปิด</span>
+      <span>·</span>
+      <b>คู่มือหน้างาน</b>
+    </div>
+    <h1>การออกแบบจุดคอขวด</h1>
+    <p class="masthead__sub">
+      สเปกกล้อง ตำแหน่งติดตั้ง ไฟส่องสว่าง และเกณฑ์ตรวจรับงาน
+      สำหรับประตูเข้า–ออกที่ระบบจะใช้อ่านป้ายทะเบียนและใบหน้า
+    </p>
+  </header>
+
+  <div class="banner">
+    <div class="banner__title">เอกสารที่สำคัญที่สุดในโปรเจกต์นี้</div>
+    <p>ความแม่นยำของระบบถูกกำหนดโดยงานติดตั้งหน้างาน มากกว่าโค้ดทุกบรรทัดรวมกัน</p>
+    <p><strong>ถ้าภาพที่ได้ไม่ผ่านเกณฑ์ในเอกสารนี้ ไม่มีโมเดล AI ตัวไหนในโลกกู้คืนได้</strong></p>
+  </div>
+
+  <nav class="toc" aria-label="สารบัญ">
+    <div class="toc__label">สารบัญ</div>
+    <ol>
+      <li><a href="#s1"><span class="toc__num">1</span><span>หลักการ</span></a></li>
+      <li><a href="#s2"><span class="toc__num">2</span><span>บทบาทของกล้องแต่ละตัว</span></a></li>
+      <li><a href="#s3"><span class="toc__num">3</span><span>จุดคอขวดรถ</span></a></li>
+      <li><a href="#s4"><span class="toc__num">4</span><span>ไฟส่องสว่างและงานโยธา</span></a></li>
+      <li><a href="#s5"><span class="toc__num">5</span><span>จุดคอขวดคน</span></a></li>
+      <li><a href="#s6"><span class="toc__num">6</span><span>แบบสำรวจหน้างาน</span></a></li>
+      <li><a href="#s7"><span class="toc__num">7</span><span>เช็กลิสต์ตรวจรับงาน</span></a></li>
+      <li><a href="#s8"><span class="toc__num">8</span><span>อาการเสียและวิธีแก้</span></a></li>
+      <li><a href="#s9"><span class="toc__num">9</span><span>สรุปงบประมาณ</span></a></li>
+    </ol>
+  </nav>
+
+  <main class="main">
+
+    <!-- ============ 1 ============ -->
+    <section class="sec" id="s1">
+      <div class="sec__head"><span class="sec__num">1</span><h2>หลักการ</h2></div>
+
+      <p>เราไม่สแกนกล้องทุกตัว เราสแกนเฉพาะ <strong>จุดที่ทุกคน/ทุกคันต้องผ่าน</strong> และเป็นจุดที่เรา <strong>ควบคุมสภาพได้</strong></p>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>สิ่งที่ควบคุมได้ที่จุดคอขวด</th><th>ผลต่อความแม่นยำ</th></tr></thead>
+          <tbody>
+            <tr><td>มุมกล้องต่อป้าย/ใบหน้า</td><td>สูงมาก</td></tr>
+            <tr><td>ระยะและขนาดวัตถุในภาพ</td><td>สูงมาก</td></tr>
+            <tr><td>ความเร็วของวัตถุ</td><td>สูงมาก</td></tr>
+            <tr><td>แสงสว่าง (โดยเฉพาะกลางคืน)</td><td>สูงมาก</td></tr>
+            <tr><td>ทิศทางการเคลื่อนที่ (เข้า/ออก)</td><td>ได้ข้อมูลเพิ่มฟรี</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4>เป้าหมายความแม่นยำ</h4>
+      <div class="tw">
+        <table>
+          <thead><tr><th>งาน</th><th>มุมกล้องทั่วไป</th><th>ที่จุดคอขวดที่ออกแบบดี</th></tr></thead>
+          <tbody>
+            <tr><td>อ่านป้ายทะเบียนไทย</td><td><span class="v">70–85%</span></td><td><span class="v v--pass">≥ 95%</span></td></tr>
+            <tr><td>จดจำใบหน้า</td><td>ต่ำ / ไม่เสถียร</td><td><span class="v v--pass">≥ 90%</span> ถ้าจัดแสงถูก</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ 2 ============ -->
+    <section class="sec" id="s2">
+      <div class="sec__head"><span class="sec__num">2</span><h2>บทบาทของกล้องแต่ละตัวที่จุดคอขวด</h2></div>
+
+      <p><strong>อย่าใช้กล้องตัวเดียวทำทุกอย่าง</strong> — เป็นงานคนละแบบที่ต้องการค่ากล้องขัดแย้งกัน</p>
+
+      <div class="tw">
+        <table class="t-prose">
+          <thead><tr><th>บทบาท</th><th>หน้าที่</th><th>ค่าที่ต้องการ</th></tr></thead>
+          <tbody>
+            <tr><td><code>lpr</code></td><td>อ่านป้ายทะเบียน</td><td>FOV แคบ, shutter เร็ว, เปิด IR ได้ (ภาพขาวดำไม่เป็นไร)</td></tr>
+            <tr><td><code>overview</code></td><td>ประเภทรถ, สีรถ, บริบท</td><td>FOV กว้าง, <strong>ภาพสี</strong> (ห้าม IR เพราะสีเพี้ยน)</td></tr>
+            <tr><td><code>face</code></td><td>ใบหน้าคน</td><td>ระดับสายตา, แสงหน้าตรง, คนละจุดกับประตูรถ</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note">
+        <strong>ทำไมแยก <code>lpr</code> กับ <code>overview</code></strong> — กล้อง LPR ต้องเปิด IR กลางคืนเพื่อให้ป้ายสว่าง (ป้ายเป็นวัสดุสะท้อนแสง) แต่ IR ทำให้ภาพเป็นขาวดำ แยกสีรถไม่ได้เลย จึงต้องมีอีกตัวถ่ายภาพสี
+      </div>
+
+      <h4>ชุดขั้นต่ำต่อไซต์ — 3 กล้อง</h4>
+      <ol>
+        <li><code>GATE-LPR</code> — ประตูรถ อ่านป้าย</li>
+        <li><code>GATE-OVERVIEW</code> — ประตูรถ ภาพรวมสี</li>
+        <li><code>DOOR-FACE</code> — ทางเข้าคนเดิน</li>
+      </ol>
+    </section>
+
+    <!-- ============ 3 ============ -->
+    <section class="sec" id="s3">
+      <div class="sec__head"><span class="sec__num">3</span><h2>จุดคอขวดรถ (ประตูใหญ่)</h2></div>
+
+      <h3 id="s3-1"><span class="h3num">3.1</span> ป้ายทะเบียนมอเตอร์ไซค์ไทยมีเฉพาะด้านหลัง <span class="crit">สำคัญ</span></h3>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>ประเภทรถ</th><th>ป้ายหน้า</th><th>ป้ายหลัง</th></tr></thead>
+          <tbody>
+            <tr><td>รถยนต์</td><td>มี</td><td>มี</td></tr>
+            <tr class="is-bad"><td><strong>มอเตอร์ไซค์</strong></td><td><strong>ไม่มี</strong></td><td>มี</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p><strong>ผลที่ตามมา:</strong> กล้องที่หันรับรถวิ่งเข้าหา (จับหน้ารถ) <strong>จะจับมอเตอร์ไซค์ไม่ได้เลย</strong> ซึ่งในโกดังไทยคือยานพาหนะส่วนใหญ่</p>
+
+      <div class="flag">
+        <div class="flag__title">วางกล้อง LPR ให้จับ “ท้ายรถ” ขณะวิ่งผ่านไปแล้ว</div>
+        <p>จะได้ทั้งรถยนต์และมอเตอร์ไซค์ด้วยกล้องตัวเดียว</p>
+      </div>
+
+      <figure class="diagram">
+        <svg viewBox="0 0 640 220" role="img" aria-label="แผนผังการวางกล้อง LPR ที่ประตู แสดงลูกระนาดก่อนโซนถ่ายภาพ และกล้องหันย้อนกลับจับท้ายรถ">
+          <defs>
+            <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path class="d-arrow" d="M0,0 L10,5 L0,10 z"/>
+            </marker>
+            <marker id="ar-rev" viewBox="0 0 10 10" refX="1" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path class="d-arrow" d="M10,0 L0,5 L10,10 z"/>
+            </marker>
+            <marker id="ar-key" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+              <path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/>
+            </marker>
+            <pattern id="bump" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+              <line x1="0" y1="0" x2="0" y2="8" stroke="var(--ink-2)" stroke-width="4"/>
+            </pattern>
+          </defs>
+
+          <!-- ทิศทางรถ -->
+          <line x1="60" y1="34" x2="470" y2="34" stroke="var(--ink-3)" stroke-width="1.5" marker-end="url(#ar)"/>
+          <text class="d-dim" x="60" y="22">ทิศทางรถวิ่งเข้า</text>
+
+          <!-- ถนน -->
+          <line x1="20" y1="120" x2="620" y2="120" stroke="var(--rule-strong)" stroke-width="2"/>
+          <line x1="20" y1="165" x2="620" y2="165" stroke="var(--rule-strong)" stroke-width="2"/>
+          <line x1="20" y1="142" x2="620" y2="142" stroke="var(--rule)" stroke-width="1.5" stroke-dasharray="14 12"/>
+
+          <!-- ลูกระนาด -->
+          <rect x="112" y="118" width="22" height="49" fill="url(#bump)" opacity=".5"/>
+          <rect x="112" y="118" width="22" height="49" fill="none" stroke="var(--ink-2)" stroke-width="1.5"/>
+          <text x="123" y="108" text-anchor="middle">ลูกระนาด</text>
+
+          <!-- ระยะ -->
+          <line x1="134" y1="192" x2="316" y2="192" stroke="var(--ink-3)" stroke-width="1"
+                marker-start="url(#ar-rev)" marker-end="url(#ar)"/>
+          <text class="d-dim" x="225" y="209" text-anchor="middle">5–10 เมตร</text>
+
+          <!-- โซนถ่ายภาพ -->
+          <rect x="316" y="118" width="96" height="49" fill="var(--accent-wash)" stroke="var(--accent)" stroke-width="1.5"/>
+          <text class="d-key" x="364" y="108" text-anchor="middle">โซนถ่ายภาพ</text>
+          <text class="d-key d-dim" x="364" y="148" text-anchor="middle">≤ 10 km/h</text>
+
+          <!-- กล้อง -->
+          <line x1="516" y1="82" x2="426" y2="126" stroke="var(--accent)" stroke-width="1.5"
+                stroke-dasharray="5 4" marker-end="url(#ar-key)"/>
+          <rect x="514" y="62" width="40" height="20" rx="2" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/>
+          <path d="M514,68 L500,64 L500,80 L514,76 z" fill="var(--accent)"/>
+          <text class="d-key" x="566" y="70">กล้อง LPR</text>
+          <text class="d-dim" x="566" y="88">หันย้อนกลับ</text>
+          <text class="d-dim" x="566" y="104">จับท้ายรถ</text>
+        </svg>
+        <figcaption>รถชะลอที่ลูกระนาดแล้วจึงเข้าโซนถ่ายภาพ กล้องหันย้อนกลับเพื่อจับป้ายหลัง</figcaption>
+      </figure>
+
+      <h4>ถ้าต้องการทั้งเข้าและออก มี 2 ทางเลือก</h4>
+      <ul>
+        <li><strong>A.</strong> กล้อง LPR 2 ตัว หันคนละทิศ — แม่นที่สุด แต่ต้นทุนเพิ่ม</li>
+        <li><strong>B.</strong> กล้อง LPR 1 ตัวจับท้าย + ใช้ทิศทางการเคลื่อนที่ของ track แยกเข้า/ออก — ประหยัดกว่า แต่ถ้าเลนเข้า-ออกแยกกันทางกายภาพจะใช้ไม่ได้</li>
+      </ul>
+      <div class="note">ตัดสินใจข้อนี้ตอนสำรวจหน้างาน แล้วบันทึกลงแบบสำรวจใน <a href="#s6">หัวข้อ 6</a></div>
+
+      <h3 id="s3-1-1"><span class="h3num">3.1.1</span> ถ้าโกดังชิดแนวที่ดิน ไม่มีพื้นที่ถอยร่นให้ตั้งกล้องมองย้อน <span class="crit">สำคัญ</span></h3>
+
+      <p>บางไซต์ (โดยเฉพาะโกดังที่สร้างชิดถนน) ไม่มี “ด้านใน” ให้ถอยร่นเข้ามาตั้งกล้องมองย้อนตามหัวข้อ 3.1 — ทางเลือกในกรณีนี้:</p>
+
+      <div class="flag">
+        <div class="flag__title">ก่อนคิดเรื่องหาเสาไฟฟ้า/ที่ตั้งกล้องนอกอาคาร ให้เช็กก่อนว่ามีจุดนี้ไหม</div>
+        <p>ประตูโกดังส่วนใหญ่มี <strong>เสา/วงกบโครงสร้างที่รับรางบานเลื่อนหรือน้ำหนักบานประตู</strong> อยู่ที่แนวประตูพอดี ถ้าเสานี้แข็งแรงพอ ติดกล้องที่เสานั้นโดยตรง (หันออกไปทางถนน) จะได้กล้องที่ <strong>ยึดกับโครงสร้างอาคารจริง</strong> ไม่ใช่เสาลอยกลางแจ้ง แก้ปัญหาการขออนุญาตและความเสี่ยงเสียหายไปพร้อมกันโดยไม่ต้องออกไปติดตั้งนอกอาคารเลย</p>
+      </div>
+
+      <h4>ผลจากการหันออกแทนที่จะหันย้อนกลับ</h4>
+      <ul>
+        <li>เห็นป้ายรถยนต์ (ป้ายหน้า) ตอน<strong>เข้า</strong> ตามปกติ</li>
+        <li><strong>ถ้าประตูเดียวใช้ทั้งเข้าและออก</strong> รถที่วิ่ง<strong>ออก</strong>จะหันท้ายให้กล้องพอดี → ป้ายมอเตอร์ไซค์ (มีเฉพาะป้ายหลัง) จะถูกจับได้ตอนขาออก แม้จะพลาดตอนขาเข้า — ไม่ได้พลาดมอเตอร์ไซค์ทั้งหมดเหมือนกล้องหันออกทิศทางเดียว</li>
+        <li>ตรวจทิศเข้า/ออกยังทำงานปกติ เพราะระบบดูจากลำดับโซนที่ตัดผ่าน ไม่ใช่ด้านไหนของรถที่เห็น</li>
+      </ul>
+
+      <div class="flag flag--stop">
+        <div class="flag__title">ความเสี่ยงเพิ่มที่ต้องทดสอบ</div>
+        <p>กล้องหันเข้าหาแสงกลางแจ้ง (ท้องฟ้า/ถนน) ขณะรถเป็นเงามืดในโกดัง เป็นสถานการณ์ backlight ที่รุนแรงกว่าปกติ <strong>ต้องเปิด WDR เต็มที่และทดสอบตอนเที่ยงวันที่แสงจ้าที่สุดด้วย</strong> เพิ่มจากช่วง 7:00/17:00 ในเช็กลิสต์หัวข้อ 7</p>
+      </div>
+
+      <h4>ถ้าไม่มีเสา/วงกบให้ใช้จริง ๆ ต้องออกไปติดนอกอาคาร</h4>
+      <div class="tw">
+        <table class="t-prose">
+          <thead><tr><th>ปัญหา</th><th>ทางแก้</th></tr></thead>
+          <tbody>
+            <tr><td>ฝน/แดด/ฝุ่น</td><td>IP66/67 ตามสเปกปกติ</td></tr>
+            <tr><td><strong>แรงกระแทก/ถูกทำลาย</strong></td><td>ระบุ housing เกรด <strong>IK10</strong> เพิ่มจาก IP rating — กล้องทั่วไปมักกันน้ำ/ฝุ่นแต่ไม่กันกระแทก</td></tr>
+            <tr><td>ถูกงัด/ขโมยสาย</td><td>เดินสายผ่าน <strong>ท่อร้อยสายโลหะ (conduit)</strong> ไม่ปล่อยเปลือย ใช้น็อตยึดหัวพิเศษ (tamper-resistant)</td></tr>
+            <tr><td>รถเฉี่ยว</td><td>ติดสูงพ้นระยะที่รถกวาดถึง แต่ยังอยู่ในช่วง <span class="v">1.0–1.5 ม.</span> ตามเกณฑ์มุมกล้อง — ถ้าเสี่ยงจริงใส่เหล็กกันชนเล็ก (bollard) หน้ากล้อง</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note">กล้องนี้ไม่ใช่กล้องความปลอดภัยหลัก (NVR ทำหน้าที่นั้น) — ถ้าเสียหายจริง ผลคือ “ดัชนีช่วงนั้นไม่มีทะเบียน” ไม่ใช่ “โกดังไม่มีกล้อง” ลงทุนป้องกันระดับกลาง (IK10 + conduit) เพียงพอ ไม่ต้องเผื่อสูงสุด</div>
+
+      <h3 id="s3-1-2"><span class="h3num">3.1.2</span> ประตูกว้างรับรถหลายขนาด — อาจต้องใช้กล้องมากกว่า 1 ตัว <span class="crit">สำคัญ</span></h3>
+
+      <p>ถ้าประตูกว้างพอรับรถสิบล้อ/รถพ่วง มักพบว่า <strong>รถแต่ละขนาดใช้เส้นทางในประตูต่างกันจริง</strong> (เช่น รถใหญ่ชิดขวาเพื่อถอยเข้าโซนจอดเฉพาะ รถเล็กเข้าทางซ้าย/กลาง) กล้องตัวเดียวที่ FOV แคบพอให้ตัวอักษร ≥25px (<a href="#s3-3">หัวข้อ 3.3</a>) อาจครอบคลุมทั้งสองเส้นทางไม่ได้พร้อมกัน</p>
+
+      <p><strong>ให้สังเกตพฤติกรรมจราจรจริงตอนสำรวจ</strong> ก่อนสรุปจำนวนกล้อง:</p>
+      <ul>
+        <li>ถ้ารถทุกขนาดใช้เส้นทางเดียวกันจริง ๆ (แค่ประตูกว้างเฉย ๆ) กล้องตัวเดียวพอ</li>
+        <li>ถ้าแยกเส้นทางชัดเจนตามขนาดรถ <strong>ให้เผื่องบกล้องตัวที่ 2</strong> — รถใหญ่ที่ถอยเข้าช้า ๆ มักเป็นโอกาสจับภาพที่ดี (แทบไม่เคลื่อนที่) เหมาะกับกล้องแยกเฉพาะเลนนั้น</li>
+      </ul>
+
+      <h3 id="s3-2"><span class="h3num">3.2</span> ขนาดป้ายทะเบียนไทย (ใช้คำนวณ FOV)</h3>
+      <div class="tw">
+        <table>
+          <thead><tr><th>ประเภท</th><th>ขนาดป้ายโดยประมาณ</th><th>ความสูงตัวอักษรบรรทัดบน</th></tr></thead>
+          <tbody>
+            <tr><td>รถยนต์</td><td><span class="v">~34 × 16 ซม.</span></td><td><span class="v v--key">~7 ซม.</span></td></tr>
+            <tr><td>มอเตอร์ไซค์</td><td><span class="v">~17.5 × 22 ซม.</span></td><td><span class="v v--key">~5 ซม.</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note">วัดจากป้ายจริงที่หน้างานยืนยันอีกครั้ง แล้วใช้ค่าที่เล็กกว่า (มอเตอร์ไซค์) เป็นตัวกำหนด</div>
+
+      <h3 id="s3-3"><span class="h3num">3.3</span> คำนวณ FOV — สูตรที่ใช้ตัดสินใจเลนส์ <span class="crit">สำคัญ</span></h3>
+
+      <p><strong>เกณฑ์: ความสูงตัวอักษรในภาพต้อง <span class="v v--key">≥ 25 พิกเซล</span></strong> — อักษรไทยเส้นซับซ้อนกว่า Latin จึงต้องการพิกเซลมากกว่า</p>
+
+      <div class="formula">ความสูงภาพที่ระนาบป้าย (เมตร) ≤ (<b>ความสูงภาพเป็นพิกเซล</b> ÷ 25) × <b>ความสูงตัวอักษร</b></div>
+
+      <h4>ตารางสำเร็จรูป — เกณฑ์เข้มที่ 30 px เพื่อเผื่อ อิงตัวอักษรมอเตอร์ไซค์ 5 ซม.</h4>
+      <div class="tw">
+        <table>
+          <thead><tr><th>ความละเอียดกล้อง</th><th>ความกว้างภาพสูงสุดที่ระนาบป้าย</th></tr></thead>
+          <tbody>
+            <tr class="is-hero"><td>1080p <span class="v">(1920×1080)</span></td><td><span class="v">≤ 3.2 เมตร</span></td></tr>
+            <tr><td>4MP <span class="v">(2560×1440)</span></td><td><span class="v">≤ 4.3 เมตร</span></td></tr>
+            <tr><td>4K <span class="v">(3840×2160)</span></td><td><span class="v">≤ 6.4 เมตร</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note">ถ้าใช้เกณฑ์รถยนต์อย่างเดียว (อักษร 7 ซม.) ตัวเลขจะกว้างขึ้น ~40% แต่ <strong>มอเตอร์ไซค์คือกรณีที่ต้องผ่าน</strong> จึงใช้ค่านี้</div>
+
+      <h3 id="s3-4"><span class="h3num">3.4</span> 1080p ดีกว่า 4K สำหรับ LPR กลางคืน <span class="crit crit--max">สำคัญมาก</span></h3>
+
+      <p>ฟังดูขัดความรู้สึก แต่จริง: เซนเซอร์ 4K มีพิกเซลเล็กกว่า จึง <strong>รับแสงได้น้อยกว่าต่อพิกเซล</strong> เมื่อบังคับ shutter เร็ว (ซึ่งจำเป็น) ภาพกลางคืนจะมี noise สูงจนอ่านไม่ออก</p>
+
+      <div class="flag">
+        <div class="flag__title">สเปกที่แนะนำ</div>
+        <p>กล้อง <strong>1080p เซนเซอร์ <span class="v">1/1.8"</span> ขึ้นไป + เลนส์ <span class="v">f/1.4</span> หรือสว่างกว่า</strong> ดีกว่ากล้อง 4K เซนเซอร์ <span class="v">1/3"</span> ที่ราคาเท่ากัน</p>
+      </div>
+
+      <h3 id="s3-5"><span class="h3num">3.5</span> เลือกความยาวโฟกัส (เลนส์)</h3>
+      <p>สำหรับเซนเซอร์ <span class="v">1/2.8"</span> (กว้าง ~5.6 มม.) และเป้าหมายความกว้างภาพ <span class="v">3.2 ม.</span></p>
+
+      <div class="formula"><b>f (มม.)</b> ≈ 1.75 × ระยะห่างจากกล้องถึงป้าย (เมตร)</div>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>ระยะกล้อง–ป้าย</th><th>f ที่ต้องใช้</th></tr></thead>
+          <tbody>
+            <tr><td><span class="v">4 ม.</span></td><td><span class="v">~7 มม.</span></td></tr>
+            <tr><td><span class="v">6 ม.</span></td><td><span class="v">~10.5 มม.</span></td></tr>
+            <tr><td><span class="v">8 ม.</span></td><td><span class="v">~14 มม.</span></td></tr>
+            <tr><td><span class="v">10 ม.</span></td><td><span class="v">~17.5 มม.</span></td></tr>
+            <tr><td><span class="v">12 ม.</span></td><td><span class="v">~21 มม.</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note"><strong>ซื้อเลนส์ varifocal</strong> (เช่น <span class="v">2.7–13.5 มม.</span> หรือ <span class="v">5–50 มม.</span>) เพื่อปรับหน้างานได้ อย่าซื้อเลนส์ fixed จนกว่าจะรู้ระยะจริง</div>
+
+      <h3 id="s3-6"><span class="h3num">3.6</span> Shutter speed — เรื่องที่พลาดกันมากที่สุด <span class="crit crit--max">วิกฤต</span></h3>
+
+      <p><strong>ปัญหา:</strong> กล้องส่วนใหญ่ตั้ง shutter เป็น auto กลางคืนกล้องจะเปิดรับแสงนานขึ้นเป็น <span class="v">1/30s</span> เพื่อให้ภาพสว่าง ผลคือ <strong>ป้ายเบลอจนอ่านไม่ออก</strong> ทั้ง ๆ ที่ภาพดู “สว่างดี”</p>
+
+      <h4>การเบลอจากการเคลื่อนที่ — ที่ FOV กว้าง 3.2 ม. บน 1080p (600 px/เมตร)</h4>
+      <div class="tw">
+        <table>
+          <thead><tr><th>ความเร็วรถ</th><th>Shutter</th><th>เบลอ</th><th>ผล (ตัวอักษรสูง ~30 px)</th></tr></thead>
+          <tbody>
+            <tr><td><span class="v">10 km/h</span></td><td><span class="v">1/1000s</span></td><td><span class="v v--pass">~1.7 px</span></td><td>ดีเยี่ยม</td></tr>
+            <tr class="is-hero"><td><span class="v">10 km/h</span></td><td><span class="v">1/500s</span></td><td><span class="v">~3.3 px</span></td><td>ดี — เป้าหมาย</td></tr>
+            <tr><td><span class="v">20 km/h</span></td><td><span class="v">1/500s</span></td><td><span class="v">~6.7 px</span></td><td>พอใช้ เริ่มเสี่ยง</td></tr>
+            <tr><td><span class="v">30 km/h</span></td><td><span class="v">1/500s</span></td><td><span class="v">~10 px</span></td><td>แย่ อ่านผิดบ่อย</td></tr>
+            <tr class="is-bad"><td><span class="v">10 km/h</span></td><td><span class="v">1/30s</span> auto กลางคืน</td><td><span class="v v--fail">~56 px</span></td><td><strong>อ่านไม่ออกเลย</strong></td></tr>
+            <tr class="is-bad"><td><span class="v">30 km/h</span></td><td><span class="v">1/30s</span></td><td><span class="v v--fail">~167 px</span></td><td>ไร้ประโยชน์สิ้นเชิง</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p><strong>เกณฑ์: เบลอต้อง <span class="v v--key">&lt; 20%</span> ของความสูงตัวอักษร</strong> (คือน้อยกว่า <span class="v">6 px</span>)</p>
+
+      <div class="flag">
+        <div class="flag__title">สิ่งที่ต้องทำที่ตัวกล้อง</div>
+        <ol>
+          <li><strong>ล็อก shutter ที่ <span class="v">1/500s</span></strong> (ถ้าแสงพอ ใช้ <span class="v">1/1000s</span> ยิ่งดี) — <strong>ห้ามใช้ auto</strong></li>
+          <li>ตั้ง gain สูงสุดไม่เกิน <span class="v">~50</span> — สูงกว่านี้ noise กินตัวอักษร</li>
+          <li>Dahua หลายรุ่นมีโปรไฟล์ <strong>“LPR” / “Vehicle Mode”</strong> ที่ล็อกให้แล้ว ถ้ามีให้ใช้ตัวนั้น</li>
+          <li><strong>shutter เร็ว = แสงน้อยลง ~16 เท่าเทียบ <span class="v">1/30s</span> ไฟส่องสว่างจึงเป็นข้อบังคับ ไม่ใช่ของเสริม</strong></li>
+        </ol>
+      </div>
+
+      <h3 id="s3-7"><span class="h3num">3.7</span> มุมกล้อง</h3>
+      <div class="tw">
+        <table class="t-prose">
+          <thead><tr><th>มุม</th><th>เกณฑ์</th><th>เหตุผล</th></tr></thead>
+          <tbody>
+            <tr><td>แนวนอน (เยื้องซ้าย/ขวา)</td><td><span class="v v--key">≤ 30°</span></td><td>เกินนี้ตัวอักษรบิดจน OCR พัง</td></tr>
+            <tr><td>แนวดิ่ง (ก้มลง)</td><td><span class="v v--key">≤ 30°</span></td><td>ยิ่งก้มมาก ป้ายยิ่งบีบแบน</td></tr>
+            <tr><td>ความสูงติดตั้ง (LPR)</td><td><span class="v v--key">1.0–1.5 ม.</span></td><td>เพื่อให้มุมก้มน้อย — ไม่ใช่ติดสูงแบบกล้องทั่วไป</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="flag flag--stop">
+        <div class="flag__title">จุดที่ขัดกับสัญชาตญาณช่างมากที่สุด</div>
+        <p>ช่างมักติดกล้องสูง 3–4 เมตรตามความเคยชิน ซึ่งทำให้มุมก้มเกิน <span class="v">45°</span> และ LPR พังทันที
+        <strong>กล้อง LPR ต้องติดต่ำ</strong> ประมาณระดับป้ายทะเบียน</p>
+      </div>
+
+      <h3 id="s3-8"><span class="h3num">3.8</span> การตั้งค่ากล้องอื่น ๆ</h3>
+      <div class="tw">
+        <table class="t-prose">
+          <thead><tr><th>ค่า</th><th>ตั้งเป็น</th><th>เหตุผล</th></tr></thead>
+          <tbody>
+            <tr><td>WDR / BLC</td><td><strong>เปิด</strong></td><td>ไฟหน้ารถกลางคืนทำป้ายขาวโพลน</td></tr>
+            <tr><td>Digital Noise Reduction (3D DNR)</td><td><strong>ต่ำหรือปิด</strong></td><td>DNR สูงทำให้ตัวอักษรเละเป็นก้อน</td></tr>
+            <tr><td>Sharpness</td><td>กลาง</td><td>สูงเกินสร้าง artifact หลอก OCR</td></tr>
+            <tr><td>Bitrate</td><td><span class="v">≥ 4 Mbps</span> สำหรับ substream</td><td>บีบอัดแรงทำลายรายละเอียดตัวอักษร</td></tr>
+            <tr><td>Codec</td><td><strong>H.264</strong> (ไม่ใช่ H.265) สำหรับ substream</td><td>decode ถูกกว่าและ artifact น้อยกว่าที่ bitrate สูง</td></tr>
+            <tr><td>เสียง</td><td>ปิด <code>-an</code></td><td>track เสียงทำ ffmpeg พังบ่อยในกล้องจีน</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ 4 ============ -->
+    <section class="sec" id="s4">
+      <div class="sec__head"><span class="sec__num">4</span><h2>ไฟส่องสว่างและงานโยธา</h2></div>
+
+      <h3 id="s4-1"><span class="h3num">4.1</span> ไฟส่องสว่าง</h3>
+      <div class="tw">
+        <table class="t-prose">
+          <thead><tr><th>ทางเลือก</th><th>ข้อดี</th><th>ข้อเสีย</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><strong>IR illuminator <span class="v">850nm</span></strong><br><span style="color:var(--ink-3);font-size:.9em">แนะนำสำหรับกล้อง <code>lpr</code></span></td>
+              <td>ป้ายทะเบียนสะท้อนแสง IR สว่างมาก · ไม่แยงตาคนขับ · ไม่รบกวนเพื่อนบ้าน</td>
+              <td>ภาพเป็นขาวดำ (ไม่เป็นไรสำหรับ LPR)</td>
+            </tr>
+            <tr>
+              <td><strong>ไฟ LED ขาวต่อเนื่อง</strong><br><span style="color:var(--ink-3);font-size:.9em">จำเป็นสำหรับ <code>overview</code> และ <code>face</code></span></td>
+              <td>ได้ภาพสี</td>
+              <td>แยงตา ต้องเล็งดี</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4>กฎการเล็งไฟ</h4>
+      <ul>
+        <li>ห้ามให้แสงสาดเข้าเลนส์กล้องโดยตรง — เกิด flare กลบภาพทั้งหมด</li>
+        <li>ห้ามแยงตาคนขับ เล็งจากด้านข้างหรือด้านบนทำมุมลง</li>
+        <li>ให้แสงตกบนโซนถ่ายภาพสม่ำเสมอ ไม่เป็นจุดสว่างจ้าสลับมืด</li>
+      </ul>
+
+      <h3 id="s4-2"><span class="h3num">4.2</span> ทิศทางที่กล้องหัน — แสงอาทิตย์ <span class="crit">สำคัญ</span></h3>
+      <p><strong>หลีกเลี่ยงการหันกล้องไปทางทิศตะวันออกและตะวันตก</strong> แสงอาทิตย์ตอนเช้าและเย็นจะยิงเข้าเลนส์ตรง ๆ ทำให้ภาพพังทั้งช่วง และเป็นช่วงที่รถเข้าออกเยอะที่สุดพอดี</p>
+      <p><strong>ทิศเหนือปลอดภัยที่สุดในประเทศไทย</strong> ทิศใต้ใช้ได้แต่ต้องระวังช่วงกลางปี</p>
+      <div class="note">ถ้าเลี่ยงไม่ได้จริง ๆ ให้ติดกันสาดยื่นเหนือกล้อง (sun shield) และทดสอบซ้ำในช่วงเวลาที่แดดแยง</div>
+
+      <h3 id="s4-3"><span class="h3num">4.3</span> งานโยธา</h3>
+      <ul>
+        <li><strong>ลูกระนาด/จุดชะลอความเร็ว วางก่อนถึงโซนถ่ายภาพ <span class="v">5–10 เมตร</span></strong> เพื่อให้รถ<strong>ช้าแล้ว</strong>ตอนเข้าเฟรม ไม่ใช่กำลังเบรก</li>
+        <li>เป้าหมาย <span class="v v--key">≤ 10 km/h</span> ขณะผ่านโซนถ่ายภาพ</li>
+        <li><strong>ถ้ามีไม้กั้นอัตโนมัติอยู่แล้ว = สภาพดีที่สุด</strong> เพราะรถหยุดนิ่ง ควรวางกล้อง LPR ให้จับตอนรถจอดรอไม้กั้น</li>
+        <li>ต้องมีไฟฟ้าและสาย LAN (PoE) ถึงจุดติดตั้งทั้งกล้องและไฟ</li>
+        <li>ตีเส้นบนพื้นกำหนด “โซนถ่ายภาพ” ให้เห็นชัด ช่วยตอนตั้งกล้องและตอนตรวจรับงาน</li>
+      </ul>
+    </section>
+
+    <!-- ============ 5 ============ -->
+    <section class="sec" id="s5">
+      <div class="sec__head"><span class="sec__num">5</span><h2>จุดคอขวดคน (ทางเข้าคนเดิน)</h2></div>
+
+      <h3 id="s5-1"><span class="h3num">5.1</span> อย่าพยายามจับใบหน้าที่ประตูรถ <span class="crit">สำคัญ</span></h3>
+      <p>เหตุผลที่ล้มเหลวเกือบทั้งหมด: กระจกหน้ารถสะท้อน, ฟิล์มกรองแสง, มุมกล้องสูงเกิน, คนขับหันหน้าไปทางถนนไม่ใช่กล้อง</p>
+      <div class="flag">
+        <div class="flag__title">แยกกล้องใบหน้าไปที่ทางเข้าคนเดิน</div>
+        <p>ทางเข้าคนเดิน / จุดสแกนบัตร / ประตูหมุน</p>
+      </div>
+
+      <h3 id="s5-2"><span class="h3num">5.2</span> เกณฑ์กล้องใบหน้า</h3>
+      <div class="tw">
+        <table>
+          <thead><tr><th>พารามิเตอร์</th><th>ค่าเป้าหมาย</th></tr></thead>
+          <tbody>
+            <tr><td>ความสูงติดตั้ง</td><td><span class="v v--key">1.6–1.8 ม.</span> ระดับสายตา</td></tr>
+            <tr><td>มุมก้ม</td><td><span class="v v--key">≤ 15°</span></td></tr>
+            <tr><td>ระยะห่างระหว่างตาสองข้างในภาพ</td><td><span class="v v--key">≥ 60 px</span></td></tr>
+            <tr><td>ระยะจับภาพ</td><td><span class="v">1.5–3 ม.</span></td></tr>
+            <tr><td>Shutter</td><td><span class="v">≥ 1/250s</span> คนเดินช้ากว่ารถ</td></tr>
+            <tr><td>แสง</td><td><strong>สม่ำเสมอจากด้านหน้า</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 id="s5-3"><span class="h3num">5.3</span> กับดักที่พบบ่อยที่สุด — Backlight <span class="crit">สำคัญ</span></h3>
+      <div class="flag flag--stop">
+        <div class="flag__title">ห้ามมีหน้าต่าง ประตูกระจก หรือแสงจ้าอยู่ด้านหลังคน</div>
+        <p>กล้องจะปรับแสงตามฉากหลังที่สว่าง ทำให้หน้าคนกลายเป็นเงาดำสนิท ใช้งานไม่ได้เลย</p>
+      </div>
+      <p><strong>วิธีตรวจ:</strong> ยืนที่ตำแหน่งคนเดินเข้า แล้วมองไปทางกล้อง ถ้าเห็นแสงจ้าอยู่ข้างหลังตัวเอง = ตำแหน่งนี้ใช้ไม่ได้</p>
+      <p><strong>วิธีแก้:</strong> ย้ายกล้องไปหันอีกทาง, ติดม่าน/ฟิล์มที่หน้าต่างด้านหลัง, หรือเพิ่มไฟส่องหน้าคน</p>
+    </section>
+
+    <!-- ============ 6 ============ -->
+    <section class="sec" id="s6">
+      <div class="sec__head"><span class="sec__num">6</span><h2>แบบสำรวจหน้างาน</h2></div>
+      <p style="color:var(--ink-2)">ทำก่อนสั่งซื้อของทุกไซต์</p>
+
+      <h3 id="s6-1"><span class="h3num">6.1</span> รายการทางเข้า–ออกทั้งหมด</h3>
+      <div class="flag flag--stop">
+        <div class="flag__title">จุดที่ไม่คลุม = จุดบอดถาวร</div>
+        <p>ระบบจุดคอขวดดีเท่ากับความครบถ้วนของจุดคอขวดเท่านั้น</p>
+      </div>
+
+      <div class="tw">
+        <table class="t-prose">
+          <thead><tr><th>#</th><th>ประเภททางเข้า–ออก</th><th>มี?</th><th>จะติดตั้ง?</th><th>ถ้าไม่ติด เหตุผล</th></tr></thead>
+          <tbody>
+            <tr><td class="v">1</td><td>ประตูใหญ่ (รถ)</td><td>☐</td><td>☐</td><td></td></tr>
+            <tr><td class="v">2</td><td>ประตูคนเดิน</td><td>☐</td><td>☐</td><td></td></tr>
+            <tr><td class="v">3</td><td>ประตูข้าง / ประตูรอง</td><td>☐</td><td>☐</td><td></td></tr>
+            <tr><td class="v">4</td><td>ท่าขนถ่ายสินค้า (loading dock)</td><td>☐</td><td>☐</td><td></td></tr>
+            <tr><td class="v">5</td><td>ทางออกฉุกเฉิน</td><td>☐</td><td>☐</td><td></td></tr>
+            <tr><td class="v">6</td><td>ช่องรั้ว/ทางลัดที่คนใช้จริง</td><td>☐</td><td>☐</td><td></td></tr>
+            <tr><td class="v">7</td><td>ที่จอดรถพนักงานแยกทางเข้า</td><td>☐</td><td>☐</td><td></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p><strong>จุดที่ตัดสินใจไม่ติดตั้ง ต้องบันทึกไว้และแจ้งผู้ใช้ให้ทราบ</strong> ไม่ใช่ปล่อยให้เข้าใจผิดว่าระบบเห็นทุกคน</p>
+
+      <h3 id="s6-2"><span class="h3num">6.2</span> แบบบันทึกต่อจุดคอขวด</h3>
+      <div class="survey"><span class="grp">ไซต์:</span>  WH____        <span class="grp">จุด:</span> ________________     <span class="grp">วันที่สำรวจ:</span> __________
+
+<span class="grp">[ สภาพกายภาพ ]</span>
+เลนรถ:            ☐ เลนเดียว (เข้า-ออกร่วม)   ☐ แยกเลนเข้า/ออก
+ไม้กั้นอัตโนมัติ:   ☐ มี   ☐ ไม่มี
+ลูกระนาดเดิม:      ☐ มี (ห่างจากจุดที่จะติดกล้อง ____ ม.)  ☐ ไม่มี — ต้องทำเพิ่ม
+ความเร็วรถปัจจุบัน: ประมาณ ______ km/h  (วัดโดย: ______________)
+ระยะที่ติดกล้องได้: ______ ม. จากโซนถ่ายภาพ
+ความสูงที่ติดได้:   ______ ม.  (เป้าหมาย LPR = 1.0–1.5 ม.)
+ทิศที่กล้องจะหัน:   ☐ เหนือ ☐ ใต้ ☐ ตะวันออก(เสี่ยง) ☐ ตะวันตก(เสี่ยง)
+
+<span class="grp">[ ระบบไฟฟ้า/เครือข่าย ]</span>
+ไฟฟ้าถึงจุด:       ☐ มี   ☐ ต้องเดินเพิ่ม ระยะ ______ ม.
+สาย LAN / PoE:     ☐ มี   ☐ ต้องเดินเพิ่ม ระยะ ______ ม.
+ไฟส่องสว่างเดิม:    ☐ มี ชนิด __________  ☐ ไม่มี — ต้องติดเพิ่ม
+
+<span class="grp">[ กล้องเดิมที่จุดนี้ ]</span>
+ยี่ห้อ/รุ่น:        ________________________
+ความละเอียด:      __________   มี substream: ☐ มี ☐ ไม่มี
+ปรับ shutter ได้:  ☐ ได้ (ล็อก 1/500 ได้)  ☐ ไม่ได้ → ต้องซื้อใหม่
+มีโหมด LPR:       ☐ มี  ☐ ไม่มี
+รองรับกี่ RTSP session พร้อมกัน: ______  (NVR ใช้ไปแล้ว ____ )
+สรุป:             ☐ ใช้ของเดิมได้   ☐ ต้องซื้อใหม่
+
+<span class="grp">[ ทางเข้าคนเดิน ]</span>
+ตำแหน่งที่จะติด:    ________________________
+มี backlight ด้านหลังคนไหม: ☐ ไม่มี  ☐ มี → วิธีแก้: ______________
+
+<span class="grp">[ NVR ]</span>
+ยี่ห้อ/รุ่น: __________  ช่องที่ตรงกับกล้องจุดนี้: ______
+NVR เก็บย้อนหลังกี่วัน: ______
+NTP ตั้งไว้ที่: ________________</div>
+    </section>
+
+    <!-- ============ 7 ============ -->
+    <section class="sec" id="s7">
+      <div class="sec__head"><span class="sec__num">7</span><h2>เช็กลิสต์ตรวจรับงานติดตั้ง</h2></div>
+
+      <div class="flag flag--stop">
+        <div class="flag__title">ต้องผ่านทุกข้อก่อนเริ่มพัฒนา pipeline AI ของไซต์นั้น</div>
+        <p>ถ้าข้อไหนไม่ผ่าน ให้กลับไปแก้การติดตั้ง — <strong>ห้ามหวังว่าโมเดลจะแก้ให้</strong></p>
+      </div>
+
+      <div class="note">ติ๊กในหน้านี้ได้เลย ระบบจะจำไว้ในเครื่องของคุณ ใช้ได้ระหว่างเดินตรวจหน้างาน</div>
+
+      <h3 id="s7-1"><span class="h3num">7.1</span> ทดสอบกลางวัน</h3>
+      <ul class="checks">
+        <li><label><input type="checkbox"><span>จับภาพรถยนต์ 20 คัน — วัดความสูงตัวอักษรบนป้าย <span class="v v--key">≥ 25 px</span> ทุกคัน</span></label></li>
+        <li><label><input type="checkbox"><span>จับภาพมอเตอร์ไซค์ 20 คัน — วัดความสูงตัวอักษร <span class="v v--key">≥ 25 px</span> ทุกคัน</span></label></li>
+        <li><label><input type="checkbox"><span>มุมเบี่ยงแนวนอน <span class="v">≤ 30°</span> และแนวดิ่ง <span class="v">≤ 30°</span></span></label></li>
+        <li><label><input type="checkbox"><span>ป้ายอยู่ในเฟรมเต็มใบ ไม่โดนตัดขอบ ทั้งรถสูง (กระบะ/รถบรรทุก) และรถเตี้ย</span></label></li>
+        <li><label><input type="checkbox"><span>ตรวจว่า shutter ถูกล็อกที่ <span class="v">1/500s</span> จริง (ดูใน OSD หรือหน้าตั้งค่ากล้อง)</span></label></li>
+        <li><label><input type="checkbox"><span>ภาพไม่มี flare จากแสงอาทิตย์ — <strong>ทดสอบซ้ำตอน <span class="v">7:00</span> และ <span class="v">17:00</span></strong></span></label></li>
+        <li><label><input type="checkbox"><span>ความเร็วรถที่ผ่านโซนถ่ายภาพ <span class="v">≤ 10 km/h</span> (วัดจริง)</span></label></li>
+      </ul>
+
+      <h3 id="s7-2"><span class="h3num">7.2</span> ทดสอบกลางคืน <span class="crit crit--max">ห้ามข้าม</span></h3>
+      <p style="color:var(--ink-2)">เป็นเงื่อนไขรับมอบงาน</p>
+      <ul class="checks">
+        <li><label><input type="checkbox"><span>จับภาพรถ 20 คันหลัง <span class="v">20:00</span> น. — อ่านป้ายด้วยตาเปล่าจากภาพได้ <span class="v v--key">≥ 19 คัน</span></span></label></li>
+        <li><label><input type="checkbox"><span>ไฟหน้ารถไม่ทำให้ป้ายขาวโพลน (ตรวจกับรถที่เปิดไฟสูง)</span></label></li>
+        <li><label><input type="checkbox"><span>Noise ไม่กลืนตัวอักษร — ถ้าเป็นจุด ๆ เต็มไปหมด แปลว่า gain สูงเกิน หรือแสงไม่พอ</span></label></li>
+        <li><label><input type="checkbox"><span>ทดสอบมอเตอร์ไซค์กลางคืนแยกต่างหาก (ป้ายเล็กกว่า ยากกว่ามาก)</span></label></li>
+        <li><label><input type="checkbox"><span>ตรวจว่ากล้องไม่สลับเป็น shutter ช้าอัตโนมัติตอนมืด</span></label></li>
+      </ul>
+
+      <h3 id="s7-3"><span class="h3num">7.3</span> ทดสอบใบหน้า</h3>
+      <ul class="checks">
+        <li><label><input type="checkbox"><span>ระยะห่างระหว่างตาในภาพ <span class="v v--key">≥ 60 px</span> สำหรับคนที่เดินผ่านปกติ</span></label></li>
+        <li><label><input type="checkbox"><span>ไม่มี backlight ทำให้หน้าเป็นเงาดำ ทดสอบทั้งกลางวันและกลางคืน</span></label></li>
+        <li><label><input type="checkbox"><span>ทดสอบกับคนสวมหมวก แว่น หน้ากากอนามัย — บันทึกว่าแต่ละกรณีเป็นอย่างไร</span></label></li>
+      </ul>
+
+      <h3 id="s7-4"><span class="h3num">7.4</span> ทดสอบระบบ</h3>
+      <ul class="checks">
+        <li><label><input type="checkbox"><span>เวลาของกล้อง–NVR–เครื่อง Frigate ต่างกัน <span class="v v--key">&lt; 2 วินาที</span> (ดู <code>08-nvr-integration.md</code>)</span></label></li>
+        <li><label><input type="checkbox"><span>กล้องรับ RTSP session ได้พอสำหรับทั้ง NVR และ Frigate พร้อมกัน (ทดสอบต่อพร้อมกันจริง)</span></label></li>
+        <li><label><input type="checkbox"><span>ต่อ RTSP ทิ้งไว้ <span class="v">24 ชม.</span> ไม่หลุด — ถ้าหลุด ตรวจ <code>rtsp_transport tcp</code> และคุณภาพสาย</span></label></li>
+      </ul>
+      <button class="checks__reset" type="button" id="reset">ล้างเครื่องหมายทั้งหมด</button>
+
+      <h3 id="s7-5"><span class="h3num">7.5</span> บันทึกผลการตรวจรับ</h3>
+      <p>เก็บภาพตัวอย่างที่ใช้ทดสอบไว้ในโฟลเดอร์ <code>samples/&lt;SITE_ID&gt;/</code> แยก <code>day/</code> และ <code>night/</code></p>
+      <div class="flag">
+        <div class="flag__title">อย่าลบทิ้ง</div>
+        <p>ชุดภาพนี้จะถูกใช้เป็น ground truth วัดความแม่นของ LPR ในเฟส 3</p>
+      </div>
+    </section>
+
+    <!-- ============ 8 ============ -->
+    <section class="sec" id="s8">
+      <div class="sec__head"><span class="sec__num">8</span><h2>อาการเสียที่พบบ่อยและวิธีแก้</h2></div>
+      <div class="tw">
+        <table class="t-prose">
+          <thead><tr><th>อาการที่เห็นในภาพ</th><th>สาเหตุที่แท้จริง</th><th>วิธีแก้</th></tr></thead>
+          <tbody>
+            <tr><td>ป้ายเบลอเป็นแถบแนวนอน</td><td>shutter ช้า (auto)</td><td><strong>ล็อก shutter <span class="v">1/500s</span> + เพิ่มไฟ</strong></td></tr>
+            <tr><td>ป้ายขาวโพลนอ่านไม่ออก กลางคืน</td><td>ไฟหน้ารถ + ไม่มี WDR</td><td>เปิด WDR, ลด gain, ใช้ IR แทนไฟขาว</td></tr>
+            <tr><td>ตัวอักษรเล็กเกินไป</td><td>FOV กว้างเกิน</td><td>ซูมเข้า / เปลี่ยนเลนส์ยาวขึ้น / ขยับกล้องเข้าใกล้</td></tr>
+            <tr><td>ตัวอักษรบิดอ่านผิด</td><td>มุมเบี่ยงเกิน <span class="v">30°</span></td><td><strong>ลดความสูงติดตั้ง</strong> และขยับให้ตรงแนวรถมากขึ้น</td></tr>
+            <tr><td>ภาพเป็นจุด noise เต็ม กลางคืน</td><td>gain สูงเกิน / แสงไม่พอ</td><td>เพิ่ม illuminator, จำกัด gain สูงสุด</td></tr>
+            <tr><td>ตัวอักษรเละเป็นก้อน</td><td>3D DNR แรงเกิน หรือ bitrate ต่ำ</td><td>ลด DNR, เพิ่ม bitrate</td></tr>
+            <tr><td>ภาพขาวจ้าทั้งเฟรมบางช่วงเวลา</td><td>แสงอาทิตย์ยิงเข้าเลนส์</td><td>ติดกันสาด / เปลี่ยนทิศกล้อง</td></tr>
+            <tr><td>จับมอเตอร์ไซค์ไม่ได้เลย</td><td>กล้องหันจับหน้ารถ</td><td><strong>ย้ายไปจับท้ายรถ</strong></td></tr>
+            <tr><td>หน้าคนเป็นเงาดำ</td><td>backlight</td><td>ย้ายกล้อง / บังแสงด้านหลัง / เพิ่มไฟหน้า</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ 9 ============ -->
+    <section class="sec" id="s9">
+      <div class="sec__head"><span class="sec__num">9</span><h2>สรุปงบประมาณต่อไซต์</h2></div>
+      <p style="color:var(--ink-2)">ประมาณการเบื้องต้น</p>
+
+      <div class="tw">
+        <table>
+          <thead><tr><th>รายการ</th><th>จำนวน</th><th>ราคาโดยประมาณ</th></tr></thead>
+          <tbody>
+            <tr><td>มินิพีซี Micro/Tiny มือสอง (i5-*T) + SSD — ดู <code>02-hardware-sizing.md</code></td><td class="v">1</td><td><span class="v">฿5,000–6,500</span></td></tr>
+            <tr><td>กล้อง LPR (1080p เซนเซอร์ใหญ่ varifocal โหมด LPR)</td><td class="v">1–2</td><td><span class="v">฿4,000–8,000</span> /ตัว</td></tr>
+            <tr><td>กล้อง overview (ถ้าไม่ใช้ของเดิม)</td><td class="v">1</td><td><span class="v">฿2,500–4,000</span></td></tr>
+            <tr><td>กล้องใบหน้า (ถ้าไม่ใช้ของเดิม)</td><td class="v">1</td><td><span class="v">฿2,500–4,000</span></td></tr>
+            <tr><td>IR illuminator / ไฟ LED</td><td class="v">1–2</td><td><span class="v">฿1,500–4,000</span></td></tr>
+            <tr><td>ลูกระนาด + งานติดตั้ง</td><td class="v">1 ชุด</td><td><span class="v">฿3,000–10,000</span></td></tr>
+            <tr><td>งานเดินไฟ/สาย LAN</td><td>—</td><td>แล้วแต่ระยะ</td></tr>
+            <tr class="total"><td>รวมโดยประมาณ</td><td></td><td><span class="v">฿23,000–42,000</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="flag">
+        <div class="flag__title">ต้นทุนส่วนใหญ่อยู่ที่กล้องและงานติดตั้ง ไม่ใช่เครื่องประมวลผล</div>
+        <p>การประหยัดค่ากล้อง LPR ลง <span class="v">฿3,000</span> แล้วได้ความแม่นลดจาก <span class="v">95%</span> เหลือ <span class="v">75%</span>
+        <strong>ไม่คุ้มเลย</strong> เพราะทำให้ทั้งระบบเสียคุณค่า — ในทางกลับกันเครื่องประมวลผลลดต้นทุนได้จริงด้วยการหาของมือสองแบบประหยัดไฟ
+        (ดู <code>02-hardware-sizing.md</code> หัวข้อ 1) แล้วย้ายส่วนต่างไปลงกล้อง LPR</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <h2>เอกสารที่เกี่ยวข้อง</h2>
+    <ul>
+      <li><code>03-camera-onboarding.md</code> — ขั้นตอนเทคนิคการต่อกล้องเข้าระบบ</li>
+      <li><code>08-nvr-integration.md</code> — การซิงก์เวลากับ NVR</li>
+      <li><code>09-multi-site-runbook.md</code> — เช็กลิสต์เปิดไซต์ใหม่ทั้งกระบวนการ</li>
+      <li><code>05-thai-lpr.md</code> — การประมวลผลป้ายทะเบียนไทย</li>
+    </ul>
+  </footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* เช็กลิสต์จำสถานะไว้ ใช้ระหว่างเดินตรวจหน้างานที่อาจกดพลาดหรือรีเฟรช */
+  var KEY = "chokepoint-acceptance-v1";
+  var boxes = Array.prototype.slice.call(document.querySelectorAll(".checks input"));
+  var saved = {};
+
+  try { saved = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { saved = {}; }
+
+  boxes.forEach(function (box, i) {
+    if (saved[i]) box.checked = true;
+    box.addEventListener("change", function () {
+      saved[i] = box.checked;
+      try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch (e) {}
+    });
+  });
+
+  var reset = document.getElementById("reset");
+  if (reset) {
+    reset.addEventListener("click", function () {
+      boxes.forEach(function (b) { b.checked = false; });
+      saved = {};
+      try { localStorage.removeItem(KEY); } catch (e) {}
+    });
+  }
+
+  /* เน้นหัวข้อปัจจุบันในสารบัญ */
+  var links = {};
+  Array.prototype.forEach.call(document.querySelectorAll(".toc a"), function (a) {
+    links[a.getAttribute("href").slice(1)] = a;
+  });
+
+  var observer = new IntersectionObserver(function (entries) {
+    entries.forEach(function (entry) {
+      var link = links[entry.target.id];
+      if (!link) return;
+      if (entry.isIntersecting) {
+        Object.keys(links).forEach(function (k) { links[k].classList.remove("is-active"); });
+        link.classList.add("is-active");
+      }
+    });
+  }, { rootMargin: "-10% 0px -80% 0px" });
+
+  Array.prototype.forEach.call(document.querySelectorAll(".sec"), function (s) { observer.observe(s); });
+})();
+</script>

@@ -1,0 +1,6 @@
+# dependency เฉพาะ indexer เพิ่มจากที่ common/requirements.txt มีอยู่แล้ว
+-r ../common/requirements.txt
+
+paho-mqtt>=2.1,<3.0
+redis>=5.0,<6.0
+requests>=2.31,<3.0

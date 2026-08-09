@@ -1,0 +1,48 @@
+# ★ ห้าม commit — มีรหัสผ่านกล้อง NVR และฐานข้อมูล
+.env
+.env.*
+!.env.example
+
+# ★ ห้าม commit — ผลลัพธ์จาก probe_cameras.py มักมี user/password กล้องฝัง
+# อยู่ใน URL ที่ log ไว้ (เจอเคสจริงจากการสำรวจหน้าร้าน) เก็บไว้ดูเองได้
+# แต่ห้ามหลุดเข้า git
+scripts/*.csv
+scripts/result*.csv
+
+# ★ ห้าม commit — เป็นข้อมูลส่วนบุคคลตาม PDPA
+samples/
+data/
+media/
+*.jpg
+*.jpeg
+*.png
+*.mp4
+!docs/**/*.png
+
+# โมเดล — ดาวน์โหลดด้วย scripts/fetch_models.py ไม่เก็บใน git
+models/*
+!models/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# ระบบปฏิบัติการ
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Log และไฟล์ชั่วคราว
+*.log
+*.tmp
+tmp/

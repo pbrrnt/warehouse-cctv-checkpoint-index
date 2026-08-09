@@ -1,0 +1,268 @@
+# ============================================================
+#  ระบบดัชนีสืบค้นภาพจากกล้องวงจรปิด — 1 stack ต่อ 1 โกดัง
+#
+#  ★ ไฟล์นี้ต้องเหมือนกันทุกไซต์  ความแตกต่างระหว่างไซต์
+#    ให้ทำผ่าน .env เท่านั้น ห้ามแก้ไฟล์นี้เป็นรายไซต์
+#
+#  เฟส 1 (ตอนนี้): รันเฉพาะ infrastructure — frigate, mosquitto,
+#                  postgres, redis
+#  เฟส 2 เป็นต้นไป: เปิด service ของเราด้วย
+#                  docker compose --profile app up -d
+# ============================================================
+
+services:
+
+  # ----------------------------------------------------------
+  #  Frigate — RTSP ingest / decode / object detection / บันทึก
+  # ----------------------------------------------------------
+  frigate:
+    image: ghcr.io/blakeblackshear/frigate:${FRIGATE_VERSION}
+    container_name: frigate
+    restart: unless-stopped
+    privileged: false
+
+    # ★ ต้องมี /dev/dri เพื่อใช้ Intel iGPU ทั้ง decode และ detect
+    #   ถ้าไม่มี ระบบจะตกไปใช้ CPU แล้วช้ามาก
+    #   ตรวจว่ามีจริง:  ls -l /dev/dri
+    devices:
+      - /dev/dri/renderD128:/dev/dri/renderD128
+
+    # Frigate ใช้ shared memory เก็บเฟรม ถ้าน้อยเกินจะ crash
+    # สูตร: (ความกว้าง × ความสูง × 1.5 × 20) ÷ 1048576 MB ต่อกล้อง
+    shm_size: "256mb"
+
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ./frigate/config.yml:/config/config.yml:ro
+      - ${MEDIA_PATH}/frigate:/media/frigate
+      # tmpfs ลดการเขียนดิสก์ของไฟล์ชั่วคราว (ยืดอายุ SSD)
+      - type: tmpfs
+        target: /tmp/cache
+        tmpfs:
+          size: 1000000000
+
+    ports:
+      - "${FRIGATE_PORT}:5000"
+      - "${FRIGATE_RTSP_PORT}:8554"     # go2rtc RTSP restream
+
+    # ★ Frigate แทนค่าตัวแปรใน config.yml ได้เฉพาะตัวที่ขึ้นต้นด้วย FRIGATE_
+    #   จึงต้อง map ชื่อจาก .env มาเป็น FRIGATE_* ตรงนี้
+    environment:
+      TZ: ${TZ}
+      FRIGATE_RTSP_PASSWORD: ${FRIGATE_RTSP_PASSWORD}
+      FRIGATE_CAMERA_USER: ${CAMERA_USER}
+      FRIGATE_CAMERA_PASSWORD: ${CAMERA_PASSWORD}
+      FRIGATE_CAM_GATE_LPR_IP: ${CAM_GATE_LPR_IP}
+      FRIGATE_CAM_GATE_OVERVIEW_IP: ${CAM_GATE_OVERVIEW_IP}
+      FRIGATE_CAM_DOOR_FACE_IP: ${CAM_DOOR_FACE_IP}
+      FRIGATE_HWACCEL_PRESET: ${FFMPEG_HWACCEL_PRESET}
+
+    depends_on:
+      - mosquitto
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+
+  # ----------------------------------------------------------
+  #  Mosquitto — MQTT broker เชื่อม Frigate กับ indexer
+  # ----------------------------------------------------------
+  mosquitto:
+    image: eclipse-mosquitto:${MOSQUITTO_VERSION}
+    container_name: mosquitto
+    restart: unless-stopped
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto_data:/mosquitto/data
+    ports:
+      - "${MQTT_PORT}:1883"
+    environment:
+      TZ: ${TZ}
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "2"
+
+
+  # ----------------------------------------------------------
+  #  PostgreSQL + pgvector — metadata และ embedding
+  # ----------------------------------------------------------
+  postgres:
+    image: pgvector/pgvector:${POSTGRES_VERSION}
+    container_name: postgres
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # ★ บังคับให้ฐานข้อมูลทำงานเป็น UTC
+      #   เวลาเก็บเป็น UTC เสมอ แปลงเป็น Asia/Bangkok ตอนแสดงผล
+      PGTZ: UTC
+    volumes:
+      - ${DATA_ROOT}/postgres:/var/lib/postgresql/data
+    ports:
+      # ★ ผูกกับ localhost เท่านั้น ไม่เปิดสู่เครือข่าย
+      - "127.0.0.1:${POSTGRES_PORT}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "2"
+
+
+  # ----------------------------------------------------------
+  #  Redis — คิวงานระหว่าง indexer worker (Redis Streams)
+  # ----------------------------------------------------------
+  redis:
+    image: redis:${REDIS_VERSION}
+    container_name: redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory 512mb
+      --maxmemory-policy noeviction
+    volumes:
+      - redis_data:/data
+    ports:
+      - "127.0.0.1:${REDIS_PORT}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "2"
+
+
+  # ==========================================================
+  #  Service ของเรา — เริ่มใช้ในเฟส 2
+  #  รันด้วย:  docker compose --profile app up -d
+  # ==========================================================
+
+  # ----------------------------------------------------------
+  #  Indexer — รับ event จาก MQTT แล้วรันโมเดล AI
+  # ----------------------------------------------------------
+  indexer:
+    profiles: ["app"]
+    build:
+      context: ./services
+      dockerfile: indexer/Dockerfile
+    container_name: indexer
+    restart: unless-stopped
+    devices:
+      - /dev/dri/renderD128:/dev/dri/renderD128
+    environment:
+      TZ: ${TZ}
+      SITE_ID: ${SITE_ID}
+      # +psycopg ระบุไดรเวอร์ psycopg3 ตรง ๆ (ตัวที่ services/common/requirements.txt ติดตั้ง)
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
+      MQTT_HOST: mosquitto
+      MQTT_PORT: 1883
+      FRIGATE_URL: http://frigate:5000
+      MEDIA_PATH: /media
+      INDEXER_WORKERS: ${INDEXER_WORKERS}
+    volumes:
+      - ${MEDIA_PATH}/index:/media
+      - ./models:/models:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mosquitto:
+        condition: service_started
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+
+  # ----------------------------------------------------------
+  #  Search API
+  # ----------------------------------------------------------
+  api:
+    profiles: ["app"]
+    build:
+      context: ./services
+      dockerfile: api/Dockerfile
+    container_name: api
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ}
+      SITE_ID: ${SITE_ID}
+      SITE_NAME: ${SITE_NAME}
+      # +psycopg ระบุไดรเวอร์ psycopg3 ตรง ๆ (ตัวที่ services/common/requirements.txt ติดตั้ง)
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      FRIGATE_URL: http://frigate:5000
+      MEDIA_PATH: /media
+      NVR_HOST: ${NVR_HOST}
+      NVR_VENDOR: ${NVR_VENDOR}
+      # ★ ใช้เตือนผู้ใช้เมื่อค้นเจอเหตุการณ์ที่เก่ากว่าที่ NVR ยังเก็บวิดีโอไว้
+      #   ป้องกันไม่ให้เสียเวลาไปหาวิดีโอที่ถูกลบไปแล้ว
+      NVR_RETENTION_DAYS: ${NVR_RETENTION_DAYS}
+      RETENTION_EVENTS_DAYS: ${RETENTION_EVENTS_DAYS}
+      RETENTION_FACE_EMBEDDINGS_DAYS: ${RETENTION_FACE_EMBEDDINGS_DAYS}
+      API_SECRET_KEY: ${API_SECRET_KEY}
+    volumes:
+      - ${MEDIA_PATH}/index:/media:ro
+      - ./models:/models:ro
+    ports:
+      - "${API_PORT}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+
+  # ----------------------------------------------------------
+  #  Web UI (ภาษาไทย)
+  # ----------------------------------------------------------
+  web:
+    profiles: ["app"]
+    build:
+      context: ./web
+    container_name: web
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ}
+    ports:
+      - "${WEB_PORT}:80"
+    depends_on:
+      - api
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "2"
+
+
+volumes:
+  mosquitto_data:
+  redis_data:

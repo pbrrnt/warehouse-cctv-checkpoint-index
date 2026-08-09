@@ -1,0 +1,573 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>01 — สถาปัตยกรรมระบบ — ระบบดัชนีสืบค้นภาพ</title>
+<style>
+:root {
+  --ground:#F5F4F2; --surface:#FFFFFF; --surface-2:#EEECE8;
+  --ink:#191714; --ink-2:#57524B; --ink-3:#8A837A;
+  --rule:#DEDAD4; --rule-strong:#C4BEB5;
+  --accent:#A66A00; --accent-ink:#7A4E00; --accent-wash:#F8F0DE;
+  --pass:#216B45; --pass-wash:#E4F0E9; --fail:#A32219; --fail-wash:#F8E6E4;
+  --shadow:0 1px 2px rgba(25,23,20,.05), 0 8px 24px -16px rgba(25,23,20,.28);
+  --font-th:"Leelawadee UI","Noto Sans Thai","Thonburi","Sarabun","Segoe UI",Tahoma,system-ui,sans-serif;
+  --font-mono:ui-monospace,"SF Mono","Cascadia Mono","Segoe UI Mono","Roboto Mono",Menlo,Consolas,monospace;
+  --measure:70ch; --rail:16rem;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground:#141210; --surface:#1C1917; --surface-2:#24201C;
+    --ink:#EFEAE2; --ink-2:#ADA49A; --ink-3:#7C736A;
+    --rule:#332D27; --rule-strong:#4A423A;
+    --accent:#E0A648; --accent-ink:#EFC077; --accent-wash:#2C2313;
+    --pass:#5FBF8C; --pass-wash:#16301F; --fail:#E5796C; --fail-wash:#331A17;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"] {
+  --ground:#141210; --surface:#1C1917; --surface-2:#24201C;
+  --ink:#EFEAE2; --ink-2:#ADA49A; --ink-3:#7C736A;
+  --rule:#332D27; --rule-strong:#4A423A;
+  --accent:#E0A648; --accent-ink:#EFC077; --accent-wash:#2C2313;
+  --pass:#5FBF8C; --pass-wash:#16301F; --fail:#E5796C; --fail-wash:#331A17;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+}
+:root[data-theme="light"] {
+  --ground:#F5F4F2; --surface:#FFFFFF; --surface-2:#EEECE8;
+  --ink:#191714; --ink-2:#57524B; --ink-3:#8A837A;
+  --rule:#DEDAD4; --rule-strong:#C4BEB5;
+  --accent:#A66A00; --accent-ink:#7A4E00; --accent-wash:#F8F0DE;
+  --pass:#216B45; --pass-wash:#E4F0E9; --fail:#A32219; --fail-wash:#F8E6E4;
+  --shadow:0 1px 2px rgba(25,23,20,.05), 0 8px 24px -16px rgba(25,23,20,.28);
+}
+
+* { box-sizing:border-box; }
+body {
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:var(--font-th); font-size:16.5px; line-height:1.85;
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+}
+:where(a){ color:var(--accent-ink); text-decoration-color:color-mix(in srgb, var(--accent) 40%, transparent); text-underline-offset:.22em; }
+:where(a):hover{ text-decoration-color:var(--accent); }
+:where(a,button,input,summary):focus-visible{ outline:2px solid var(--accent); outline-offset:3px; border-radius:3px; }
+
+.page{ display:grid; grid-template-columns:var(--rail) minmax(0,1fr); gap:3.5rem;
+       max-width:78rem; margin:0 auto; padding:0 2rem 6rem; align-items:start; }
+.main{ min-width:0; max-width:var(--measure); }
+@media (max-width:60rem){ .page{ grid-template-columns:minmax(0,1fr); gap:0; padding:0 1.15rem 4rem; } .main{ max-width:none; } }
+
+.masthead{ grid-column:1/-1; border-bottom:1px solid var(--rule);
+           padding:3.5rem 0 2rem; margin-bottom:2.5rem; display:flex; flex-direction:column; gap:.9rem; }
+.masthead__kicker{ font-family:var(--font-mono); font-size:.72rem; letter-spacing:.14em;
+                   text-transform:uppercase; color:var(--ink-3); display:flex; flex-wrap:wrap; gap:.55rem .9rem; align-items:center; }
+.masthead__kicker b{ color:var(--accent-ink); font-weight:600; }
+.masthead__kicker a{ color:var(--ink-3); text-decoration:none; }
+.masthead__kicker a:hover{ color:var(--accent-ink); }
+.masthead h1{ margin:0; font-size:clamp(1.8rem,1.2rem + 2.2vw,2.5rem); line-height:1.35;
+              font-weight:700; letter-spacing:-.005em; text-wrap:balance; }
+.masthead__sub{ margin:0; max-width:56ch; color:var(--ink-2); font-size:1.02rem; }
+
+.toc{ position:sticky; top:2rem; font-size:.875rem; line-height:1.6;
+      border-left:1px solid var(--rule); padding-left:1.1rem; }
+.toc__label{ font-family:var(--font-mono); font-size:.68rem; letter-spacing:.14em;
+             text-transform:uppercase; color:var(--ink-3); margin-bottom:.85rem; }
+.toc ol{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:.1rem; }
+.toc li{ margin:0; }
+.toc a{ display:block; padding:.3rem 0; color:var(--ink-2); text-decoration:none; border-radius:2px; }
+.toc a:hover{ color:var(--ink); }
+.toc a.is-active{ color:var(--accent-ink); font-weight:600; }
+@media (max-width:60rem){
+  .toc{ position:static; border-left:0; border:1px solid var(--rule); border-radius:3px;
+        background:var(--surface); padding:1rem 1.1rem; margin-bottom:2.5rem; }
+  .toc ol{ columns:2; column-gap:1.5rem; }
+  .toc li{ break-inside:avoid; }
+}
+
+h2{ margin:3.4rem 0 1.5rem; padding-bottom:.55rem; border-bottom:2px solid var(--ink);
+    font-size:clamp(1.25rem,1.1rem + .7vw,1.5rem); line-height:1.4; font-weight:700;
+    text-wrap:balance; scroll-margin-top:1.5rem; }
+.main > h2:first-child{ margin-top:0; }
+h3{ margin:2.6rem 0 .9rem; font-size:1.06rem; font-weight:700; line-height:1.5; scroll-margin-top:1.5rem; }
+h4{ margin:1.9rem 0 .6rem; font-size:.95rem; font-weight:700; color:var(--ink-2); }
+p{ margin:0 0 1rem; }
+strong{ font-weight:700; }
+ul,ol{ margin:0 0 1.1rem; padding-left:1.35rem; }
+li{ margin-bottom:.4rem; }
+li:last-child{ margin-bottom:0; }
+li > ul, li > ol { margin-top:.4rem; }
+hr{ border:0; border-top:1px solid var(--rule); margin:2.5rem 0; }
+
+/* ★ ในต้นฉบับ = ระดับความสำคัญ */
+.star{ color:var(--accent); font-size:.9em; }
+
+blockquote{ margin:1.4rem 0; padding:.1rem 0 .1rem 1.1rem;
+            border-left:3px solid var(--rule-strong); color:var(--ink-2); font-size:.96rem; }
+blockquote strong{ color:var(--ink); }
+blockquote > :last-child{ margin-bottom:0; }
+/* blockquote ที่ขึ้นต้นด้วย ★ = คำเตือนสำคัญ */
+blockquote.is-flag{ background:var(--surface); border:1px solid var(--rule);
+                    border-left:4px solid var(--accent); border-radius:2px;
+                    padding:1.05rem 1.25rem; box-shadow:var(--shadow); color:var(--ink); }
+
+.tw{ overflow-x:auto; margin:1.4rem 0; border:1px solid var(--rule); border-radius:3px;
+     background:var(--surface); -webkit-overflow-scrolling:touch; }
+table{ border-collapse:collapse; width:100%; font-size:.93rem; line-height:1.65;
+       font-variant-numeric:tabular-nums; }
+thead th{ background:var(--surface-2); text-align:left; font-weight:700; font-size:.8rem;
+          color:var(--ink-2); padding:.6rem .85rem; border-bottom:1px solid var(--rule-strong); white-space:nowrap; }
+td{ padding:.62rem .85rem; border-bottom:1px solid var(--rule); vertical-align:top; text-align:left; }
+tbody tr:last-child td{ border-bottom:0; }
+td:empty{ min-width:4rem; }
+
+code{ font-family:var(--font-mono); font-size:.875em; background:var(--surface-2);
+      padding:.1em .38em; border-radius:2px; }
+pre{ font-family:var(--font-mono); font-size:.85rem; line-height:1.7; background:var(--surface);
+     border:1px solid var(--rule); border-radius:3px; padding:1rem 1.15rem; margin:1.3rem 0;
+     overflow-x:auto; color:var(--ink); font-variant-numeric:tabular-nums; }
+pre code{ background:none; padding:0; font-size:1em; white-space:pre; }
+
+/* เช็กลิสต์ติ๊กได้ จำสถานะไว้ — ใช้ li.chk เพื่อรองรับรายการซ้อนชั้น */
+ul:has(> li.chk){ list-style:none; margin:1.1rem 0 1.5rem; padding:0; }
+li.chk > ul{ margin:.3rem 0 .5rem 1.8rem; }
+li.chk{ margin:0; }
+li.chk > label{ display:flex; gap:.7rem; align-items:flex-start; padding:.5rem .7rem;
+                border-radius:3px; cursor:pointer; transition:background .12s ease; }
+li.chk > label:hover{ background:var(--surface-2); }
+li.chk input{ appearance:none; flex:0 0 auto; width:1.05rem; height:1.05rem; margin:.38rem 0 0;
+              border:1.5px solid var(--rule-strong); border-radius:2px; background:var(--surface);
+              cursor:pointer; position:relative; }
+li.chk input:checked{ background:var(--pass); border-color:var(--pass); }
+li.chk input:checked::after{ content:""; position:absolute; left:5px; top:1px; width:4px; height:9px;
+                             border:solid var(--surface); border-width:0 2px 2px 0; transform:rotate(42deg); }
+li.chk input:checked + span{ color:var(--ink-3); text-decoration:line-through; text-decoration-thickness:1px; }
+li.chk > label > span{ flex:1; }
+.checks-reset{ font-family:var(--font-mono); font-size:.72rem; letter-spacing:.06em; background:none;
+               border:1px solid var(--rule); border-radius:2px; color:var(--ink-3);
+               padding:.3rem .65rem; cursor:pointer; margin:.4rem 0 1.5rem; display:inline-block; }
+.checks-reset:hover{ color:var(--ink); border-color:var(--rule-strong); }
+
+/* หน้า index */
+.cards{ list-style:none; padding:0; margin:0; display:grid; gap:.65rem; }
+.cards li{ margin:0; }
+.cards a{ display:flex; gap:1rem; align-items:baseline; text-decoration:none; color:inherit;
+          background:var(--surface); border:1px solid var(--rule); border-radius:3px;
+          padding:.9rem 1.1rem; transition:border-color .12s ease, transform .12s ease; }
+.cards a:hover{ border-color:var(--accent); transform:translateX(2px); }
+.cards .n{ font-family:var(--font-mono); font-size:.85rem; color:var(--ink-3); font-variant-numeric:tabular-nums; }
+.cards .t{ font-weight:700; display:block; margin-bottom:.1rem; }
+.cards .d{ color:var(--ink-2); font-size:.92rem; display:block; line-height:1.6; }
+.cards .is-key .t{ color:var(--accent-ink); }
+.cards a.is-key{ border-left:3px solid var(--accent); }
+
+@media print{
+  :root{ --ground:#fff; --surface:#fff; --surface-2:#f2f2f2; --ink:#000; --ink-2:#333; --ink-3:#666;
+         --rule:#bbb; --rule-strong:#888; --accent:#000; --accent-ink:#000; --accent-wash:#f4f4f4; --shadow:none; }
+  body{ font-size:10.5pt; line-height:1.65; }
+  .toc,.checks-reset{ display:none; }
+  .page{ display:block; max-width:none; padding:0; }
+  h2,h3,h4{ page-break-after:avoid; }
+  .tw,pre,blockquote{ page-break-inside:avoid; }
+  a{ text-decoration:none; color:#000; }
+}
+@media (prefers-reduced-motion: reduce){ *{ animation:none !important; transition:none !important; scroll-behavior:auto !important; } }
+html{ scroll-behavior:smooth; }
+</style>
+</head>
+<body data-doc="01-architecture">
+<div class="page">
+  <header class="masthead">
+    <div class="masthead__kicker">
+      <span>เอกสาร 01</span><span>·</span><span>ระบบดัชนีสืบค้นภาพจากกล้องวงจรปิด</span><span>·</span><a href="index.html"><b>สารบัญทั้งหมด</b></a>
+    </div>
+    <h1>สถาปัตยกรรมระบบ</h1>
+    
+  </header>
+  <nav class="toc" aria-label="สารบัญ">
+    <div class="toc__label">สารบัญ</div>
+    <ol>
+      <li><a href="#1-ระบบนี้คืออะไร-และไม่ใช่อะไร">1. ระบบนี้คืออะไร (และไม่ใช่อะไร)</a></li>
+      <li><a href="#2-ภาพรวม-ต่อ-1-โกดัง">2. ภาพรวม (ต่อ 1 โกดัง)</a></li>
+      <li><a href="#3-หลักการที่สำคัญที่สุด-event-driven-ไม่ใช่-frame-driven">3. ★ หลักการที่สำคัญที่สุด: Event-driven ไม่ใช่ Frame-driven</a></li>
+      <li><a href="#4-ส่วนประกอบ">4. ส่วนประกอบ</a></li>
+      <li><a href="#5-เหตุผลของการเลือกเทคโนโลยี">5. เหตุผลของการเลือกเทคโนโลยี</a></li>
+      <li><a href="#6-ขอบเขตที่ชัดเจนระหว่างเรากับ-frigate">6. ขอบเขตที่ชัดเจนระหว่างเรากับ Frigate</a></li>
+      <li><a href="#7-การออกแบบสำหรับหลายไซต์">7. การออกแบบสำหรับหลายไซต์</a></li>
+      <li><a href="#8-ข้อจำกัดที่ยอมรับไว้ตั้งแต่ต้น">8. ข้อจำกัดที่ยอมรับไว้ตั้งแต่ต้น</a></li>
+      <li><a href="#เอกสารที่เกี่ยวข้อง">เอกสารที่เกี่ยวข้อง</a></li>
+    </ol>
+  </nav>
+  <main class="main">
+<hr />
+<h2 id="1-ระบบนี้คืออะไร-และไม่ใช่อะไร">1. ระบบนี้คืออะไร (และไม่ใช่อะไร)</h2>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>ระบบนี้<strong>คือ</strong></th>
+<th>ระบบนี้<strong>ไม่ใช่</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ดัชนีสำหรับค้นหาว่า &quot;ใคร/อะไร ผ่านประตูเมื่อไร&quot;</td>
+<td>ระบบบันทึกวิดีโอ (NVR ทำหน้าที่นั้น)</td>
+</tr>
+<tr>
+<td>เครื่องมือ <strong>จำกัดวงการค้นหา</strong> ให้เจ้าหน้าที่</td>
+<td>หลักฐานเด็ดขาด — ต้องยืนยันด้วยวิดีโอจาก NVR เสมอ</td>
+</tr>
+<tr>
+<td>ระบบที่ดูเฉพาะจุดคอขวดเข้า–ออก</td>
+<td>ระบบติดตามความเคลื่อนไหวทั่วทั้งโกดัง</td>
+</tr>
+<tr>
+<td>ระบบแยกอิสระต่อโกดัง</td>
+<td>ระบบรวมศูนย์ (ยังไม่ทำ แต่ไม่ปิดทาง)</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>คำถามที่ระบบนี้ตอบได้:</strong></p>
+<ul>
+<li>&quot;รถทะเบียน 1กก 1234 เข้ามาวันไหนบ้างในเดือนนี้&quot;</li>
+<li>&quot;คนหน้าแบบนี้ (อัปโหลดรูป) เคยเข้ามากี่ครั้ง&quot;</li>
+<li>&quot;รถกระบะสีขาวที่เข้าประตูใหญ่ช่วงบ่ายเมื่อวานมีคันไหนบ้าง&quot;</li>
+<li>&quot;ตอนนี้มีรถอะไรอยู่ในโกดังบ้าง&quot; (จากทิศทางเข้า–ออก)</li>
+</ul>
+<p><strong>คำถามที่ตอบไม่ได้:</strong> &quot;คนนั้นเดินไปที่ไหนต่อหลังเข้ามา&quot; — ต้องตามด้วย NVR เอง</p>
+<hr />
+<h2 id="2-ภาพรวม-ต่อ-1-โกดัง">2. ภาพรวม (ต่อ 1 โกดัง)</h2>
+<pre><code>  กล้องระดับ C (ที่เหลือทั้งหมด) ──mainstream──▶ ┌──────────────┐
+                                                │ NVR (ของเดิม) │
+  กล้องระดับ A (จุดคอขวด 2–4 ตัว) ──mainstream──▶│ บันทึกหลัก    │◀── เจ้าหน้าที่
+        │                                       └──────────────┘   เปิดดูของจริง
+        │ substream (detect) + mainstream (เฉพาะ event)     ▲
+        ▼                                                  │
+  ┌──────────────────────────────┐                         │
+  │ Frigate 0.17.2 (+ go2rtc)     │                        │
+  │ • decode VAAPI/QSV (/dev/dri) │                        │
+  │ • detect OpenVINO บน iGPU     │                        │
+  │ • snapshot + คลิปเหตุการณ์     │                        │
+  └──────┬──────────────┬─────────┘                        │
+         │ MQTT         │ HTTP API                          │
+         ▼              ▼                                   │
+  ┌──────────────────────────────┐                          │
+  │ indexer (Python)              │                         │
+  │  ├ face   : SCRFD + ArcFace   │                         │
+  │  ├ vehicle: attrs + re-ID     │                         │
+  │  └ plate  : YOLO + Thai OCR   │                         │
+  └──────┬───────────────────────┘                          │
+         ▼                                                   │
+  ┌──────────────────┐  ┌──────────────┐                    │
+  │ PostgreSQL       │  │ object store │                    │
+  │ + pgvector HNSW  │  │ crops/thumbs │                    │
+  └────────┬─────────┘  └──────┬───────┘                    │
+           ▼                    ▼                            │
+  ┌────────────────────────────────────────┐                │
+  │ search-api (FastAPI) + Web UI (ไทย)     │────────────────┘
+  │ คืนผล: กล้อง + ช่อง NVR + เวลาเป๊ะ ๆ    │  &quot;ไปเปิดต่อใน NVR&quot;
+  └────────────────────────────────────────┘
+</code></pre>
+<hr />
+<h2 id="3-หลักการที่สำคัญที่สุด-event-driven-ไม่ใช่-frame-driven">3. <span class="star">★</span> หลักการที่สำคัญที่สุด: Event-driven ไม่ใช่ Frame-driven</h2>
+<p><strong>ปัญหา:</strong> เครื่องเป็น CPU-only การรันโมเดล AI หนัก ๆ ทุกเฟรมของทุกกล้องเป็นไปไม่ได้</p>
+<p><strong>วิธีแก้:</strong> แบ่งงานเป็นสองระดับที่มีต้นทุนต่างกันมาก</p>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>ระดับ</th>
+<th>ใคร</th>
+<th>ความถี่</th>
+<th>โมเดล</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>ต่อเฟรม</strong></td>
+<td>Frigate</td>
+<td>5 fps × จำนวนกล้อง</td>
+<td>โมเดลเบา (detect วัตถุ) ทำงานเฉพาะเมื่อมี motion</td>
+</tr>
+<tr>
+<td><strong>ต่อเหตุการณ์</strong></td>
+<td>indexer ของเรา</td>
+<td>~500 ครั้ง/วัน</td>
+<td>โมเดลหนัก (embedding, OCR) ทำครั้งเดียวต่อ tracked object</td>
+</tr>
+</tbody>
+</table></div>
+<pre><code>รถ 1 คันวิ่งผ่าน  =  Frigate เห็น ~50 เฟรม  =  indexer ทำงาน 1 ครั้ง
+                     (โมเดลเบา 50 ครั้ง)      (โมเดลหนัก 1 ครั้ง)
+</code></pre>
+<p><strong>ผลลัพธ์:</strong> ต้นทุน AI ผูกกับ <strong>จำนวนเหตุการณ์ต่อวัน</strong> ไม่ใช่ จำนวนกล้อง × fps
+→ ระบบทำงานได้บนมินิพีซี ฿8,000 และเพิ่มกล้องได้โดยต้นทุนโตช้ามาก</p>
+<h3 id="3-1-การเลือกเฟรมที่ดีที่สุด">3.1 การเลือกเฟรมที่ดีที่สุด</h3>
+<p>indexer ไม่ได้ใช้เฟรมสุ่ม แต่ใช้ snapshot ที่ Frigate คัดมาแล้วว่าคะแนนสูงสุดของ track นั้น
+สำหรับใบหน้าเราคัดเพิ่มอีกชั้นด้วย blur score + ขนาดหน้า + มุมหน้า
+สำหรับป้ายทะเบียนเราใช้ <strong>หลายเฟรมแล้วโหวต</strong> เพราะ OCR ผิดพลาดง่ายกว่า (ดู <a href="05-thai-lpr.html"><code>05-thai-lpr.md</code></a> หัวข้อ 5.3)</p>
+<hr />
+<h2 id="4-ส่วนประกอบ">4. ส่วนประกอบ</h2>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>Service</th>
+<th>หน้าที่</th>
+<th>Port</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>frigate</code></td>
+<td>RTSP ingest, decode, object detection, บันทึก</td>
+<td>5000, 8554</td>
+</tr>
+<tr>
+<td><code>mosquitto</code></td>
+<td>MQTT broker เชื่อม Frigate กับ indexer</td>
+<td>1883</td>
+</tr>
+<tr>
+<td><code>postgres</code></td>
+<td>metadata + vector (pgvector)</td>
+<td>5432</td>
+</tr>
+<tr>
+<td><code>redis</code></td>
+<td>คิวงานระหว่าง indexer worker (Redis Streams)</td>
+<td>6379</td>
+</tr>
+<tr>
+<td><code>indexer</code></td>
+<td>consume event → รันโมเดล → เขียน DB</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>api</code></td>
+<td>FastAPI สำหรับค้นหา</td>
+<td>8000</td>
+</tr>
+<tr>
+<td><code>web</code></td>
+<td>หน้าเว็บภาษาไทย</td>
+<td>8080</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="4-1-การไหลของข้อมูล">4.1 การไหลของข้อมูล</h3>
+<pre><code>1. Frigate ตรวจพบวัตถุ → สร้าง tracked object
+2. Frigate ส่ง MQTT: frigate/events {type: &quot;end&quot;, after: {...}}
+3. indexer รับ event → push เข้า Redis Stream
+4. indexer worker ดึงงาน → เรียก Frigate API ขอ snapshot
+       GET /api/events/&lt;id&gt;/snapshot.jpg
+5. worker รันโมเดลตาม label:
+       person          → face pipeline
+       car/motorcycle  → vehicle + plate pipeline
+6. worker เขียนผลลง Postgres + บันทึก crop ลง object store
+7. worker ack งานใน Redis Stream
+</code></pre>
+<p><strong>การรับมือความล้มเหลว:</strong> Redis Streams มี consumer group + ack ถ้า worker ตายกลางทาง งานจะถูกส่งให้ worker อื่นทำต่อ ไม่หายไปเฉย ๆ</p>
+<hr />
+<h2 id="5-เหตุผลของการเลือกเทคโนโลยี">5. เหตุผลของการเลือกเทคโนโลยี</h2>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>ส่วน</th>
+<th>เลือก</th>
+<th>เหตุผลหลัก</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>RTSP/decode/record</td>
+<td><strong>Frigate + go2rtc</strong></td>
+<td>ปัญหา reconnect, codec เพี้ยน, timestamp drift, tiered retention ถูกแก้มาแล้ว (<a href="00-decisions.html">ADR-001</a>)</td>
+</tr>
+<tr>
+<td>Object detection</td>
+<td><strong>OpenVINO บน Intel iGPU</strong></td>
+<td>เป็น accelerator ที่มีอยู่แล้วในเครื่อง ไม่ต้องซื้อเพิ่ม</td>
+</tr>
+<tr>
+<td>ฐานข้อมูล + vector</td>
+<td><strong>PostgreSQL + pgvector</strong></td>
+<td>metadata กับ vector อยู่ที่เดียว JOIN ตรง ๆ, ดูแล service น้อยลง 1 ตัว (<a href="00-decisions.html">ADR-007</a>)</td>
+</tr>
+<tr>
+<td>คิวงาน</td>
+<td><strong>Redis Streams</strong></td>
+<td>เบากว่า Kafka/RabbitMQ มาก แต่มี consumer group + ack ครบ</td>
+</tr>
+<tr>
+<td>Object store</td>
+<td><strong>filesystem + adapter</strong></td>
+<td>local disk พอสำหรับไซต์เดียว สลับเป็น MinIO ได้เมื่อต้องรวมศูนย์</td>
+</tr>
+<tr>
+<td>Face embedding</td>
+<td><strong>ArcFace (InsightFace buffalo_l)</strong></td>
+<td>มาตรฐานอุตสาหกรรม, ONNX รันบน OpenVINO ได้</td>
+</tr>
+<tr>
+<td>Vehicle attrs / re-ID</td>
+<td><strong>OpenVINO Model Zoo</strong></td>
+<td><code>vehicle-attributes-recognition-barrier-0039</code>, <code>vehicle-reid-0001</code> — ออกแบบมาสำหรับ Intel โดยตรง</td>
+</tr>
+<tr>
+<td>Thai OCR</td>
+<td><strong>PaddleOCR <code>th_PP-OCRv5_mobile_rec</code></strong></td>
+<td>โมเดลไทยเดียวที่มีคุณภาพพอใช้เป็นฐาน fine-tune</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<h2 id="6-ขอบเขตที่ชัดเจนระหว่างเรากับ-frigate">6. ขอบเขตที่ชัดเจนระหว่างเรากับ Frigate</h2>
+<p><strong>เราไม่แก้โค้ด Frigate</strong> สื่อสารผ่าน 2 ช่องทางเท่านั้น:</p>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>ช่องทาง</th>
+<th>ใช้ทำอะไร</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>MQTT <code>frigate/events</code></td>
+<td>รับรู้ว่ามี tracked object ใหม่</td>
+</tr>
+<tr>
+<td>MQTT <code>frigate/tracked_object_update</code></td>
+<td>รับ metadata เพิ่มเติม</td>
+</tr>
+<tr>
+<td>HTTP <code>GET /api/events/&lt;id&gt;/snapshot.jpg</code></td>
+<td>ดึงภาพมาประมวลผล</td>
+</tr>
+<tr>
+<td>HTTP <code>GET /api/events/&lt;id&gt;/thumbnail.jpg</code></td>
+<td>ดึงภาพย่อสำหรับแสดงผล</td>
+</tr>
+<tr>
+<td>HTTP <code>GET /api/stats</code></td>
+<td>เฝ้าระวังสมรรถนะ</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>ประโยชน์:</strong> อัปเกรด Frigate ได้โดยไม่กระทบระบบเรา ตราบใดที่ API เหล่านี้ไม่เปลี่ยน</p>
+<p><strong>สิ่งที่ปิดใน Frigate</strong> (เพราะเราทำเอง — ดู <a href="00-decisions.html">ADR-002</a>, <a href="00-decisions.html">ADR-003</a>)</p>
+<ul>
+<li><code>lpr</code> — อ่านไทยไม่ได้</li>
+<li><code>face_recognition</code> — ไม่ให้ embedding ออกมา</li>
+<li><code>semantic_search</code> — ค้นได้แค่ระดับภาพรวมฉาก ไม่ใช่ re-ID และกิน RAM มาก</li>
+</ul>
+<hr />
+<h2 id="7-การออกแบบสำหรับหลายไซต์">7. การออกแบบสำหรับหลายไซต์</h2>
+<p>แต่ละโกดัง = <strong>stack เดียวกันเป๊ะ ๆ</strong> ต่างกันแค่ไฟล์ <code>.env</code></p>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>หลักการ</th>
+<th>ทำอย่างไร</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>มี <code>site_id</code> ตั้งแต่ schema แรก</td>
+<td>ทุกตารางหลักมีคอลัมน์นี้ แม้ตอนนี้ยังมีไซต์เดียว</td>
+</tr>
+<tr>
+<td>ชื่อไม่ซ้ำข้ามไซต์</td>
+<td><code>camera_id</code> = <code>&lt;SITE_ID&gt;-&lt;จุด&gt;-&lt;บทบาท&gt;</code> เช่น <code>WH01-GATE-LPR</code></td>
+</tr>
+<tr>
+<td>ทุกไซต์รันเวอร์ชันเดียวกัน</td>
+<td>ปักหมุด image tag/digest และเวอร์ชันโมเดลใน <code>.env</code></td>
+</tr>
+<tr>
+<td>แก้ที่ต้นทางเสมอ</td>
+<td>ห้ามแก้โค้ดเฉพาะไซต์ — ถ้าต้องต่าง ให้ทำผ่าน config</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>ทางที่เปิดไว้แต่ยังไม่ทำ:</strong> ระบบรวมศูนย์ที่ยิงคิวรีไปทุกไซต์แล้วรวมผล — ทำได้ภายหลังโดยไม่แก้ระบบเดิม เพราะมี <code>site_id</code> และ API สม่ำเสมออยู่แล้ว</p>
+<hr />
+<h2 id="8-ข้อจำกัดที่ยอมรับไว้ตั้งแต่ต้น">8. ข้อจำกัดที่ยอมรับไว้ตั้งแต่ต้น</h2>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>ข้อจำกัด</th>
+<th>เหตุผลที่ยอมรับ</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>เห็นเฉพาะจุดคอขวด ไม่เห็นภายในโกดัง</td>
+<td>งานที่ยากคือหาเข็มในกองฟาง ส่วนการตามต่อในโกดัง NVR ทำได้อยู่แล้ว</td>
+</tr>
+<tr>
+<td>ทางเข้า–ออกที่ไม่ได้ติดกล้อง = จุดบอด</td>
+<td>ต้องสำรวจให้ครบและ <strong>แจ้งผู้ใช้ให้รู้ตัว</strong></td>
+</tr>
+<tr>
+<td>ต้องพึ่ง NVR ในการดูวิดีโอเต็ม</td>
+<td>ประหยัดพื้นที่มหาศาลและไม่ทำงานซ้ำซ้อน</td>
+</tr>
+<tr>
+<td>ความแม่นขึ้นกับงานติดตั้งหน้างาน</td>
+<td>เป็นเรื่องที่ควบคุมได้ ถ้าทำตาม <a href="10-chokepoint-design.html"><code>10-chokepoint-design.md</code></a></td>
+</tr>
+<tr>
+<td>แต่ละไซต์ค้นได้เฉพาะข้อมูลของตัวเอง</td>
+<td>ตรงกับวิธีทำงานจริงที่เจ้าหน้าที่ค้นที่หน้างาน</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<h2 id="เอกสารที่เกี่ยวข้อง">เอกสารที่เกี่ยวข้อง</h2>
+<ul>
+<li><a href="00-decisions.html"><code>00-decisions.md</code></a> — เหตุผลเบื้องหลังแต่ละการตัดสินใจ</li>
+<li><a href="04-data-model.html"><code>04-data-model.md</code></a> — โครงสร้างฐานข้อมูล</li>
+<li><a href="10-chokepoint-design.html"><code>10-chokepoint-design.md</code></a> — งานติดตั้งหน้างานที่ชี้ขาดความแม่นยำ</li>
+</ul>
+
+  </main>
+</div>
+<script>
+(function () {
+  "use strict";
+  var KEY = "docs-checks-" + (document.body.getAttribute("data-doc") || "x");
+  var boxes = Array.prototype.slice.call(document.querySelectorAll("li.chk input"));
+  var saved = {};
+  try { saved = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { saved = {}; }
+  boxes.forEach(function (box, i) {
+    if (saved[i]) box.checked = true;
+    box.addEventListener("change", function () {
+      saved[i] = box.checked;
+      try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch (e) {}
+    });
+  });
+  var reset = document.querySelector(".checks-reset");
+  if (reset) reset.addEventListener("click", function () {
+    boxes.forEach(function (b) { b.checked = false; });
+    saved = {};
+    try { localStorage.removeItem(KEY); } catch (e) {}
+  });
+
+  var links = {};
+  Array.prototype.forEach.call(document.querySelectorAll(".toc a"), function (a) {
+    links[a.getAttribute("href").slice(1)] = a;
+  });
+  var heads = document.querySelectorAll(".main h2");
+  if (!heads.length || !window.IntersectionObserver) return;
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      var link = links[e.target.id];
+      if (!link || !e.isIntersecting) return;
+      Object.keys(links).forEach(function (k) { links[k].classList.remove("is-active"); });
+      link.classList.add("is-active");
+    });
+  }, { rootMargin: "-8% 0px -80% 0px" });
+  Array.prototype.forEach.call(heads, function (h) { io.observe(h); });
+})();
+</script>
+</body>
+</html>

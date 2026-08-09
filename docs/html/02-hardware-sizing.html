@@ -1,0 +1,682 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>02 — การจัดขนาดเครื่องและพื้นที่จัดเก็บ — ระบบดัชนีสืบค้นภาพ</title>
+<style>
+:root {
+  --ground:#F5F4F2; --surface:#FFFFFF; --surface-2:#EEECE8;
+  --ink:#191714; --ink-2:#57524B; --ink-3:#8A837A;
+  --rule:#DEDAD4; --rule-strong:#C4BEB5;
+  --accent:#A66A00; --accent-ink:#7A4E00; --accent-wash:#F8F0DE;
+  --pass:#216B45; --pass-wash:#E4F0E9; --fail:#A32219; --fail-wash:#F8E6E4;
+  --shadow:0 1px 2px rgba(25,23,20,.05), 0 8px 24px -16px rgba(25,23,20,.28);
+  --font-th:"Leelawadee UI","Noto Sans Thai","Thonburi","Sarabun","Segoe UI",Tahoma,system-ui,sans-serif;
+  --font-mono:ui-monospace,"SF Mono","Cascadia Mono","Segoe UI Mono","Roboto Mono",Menlo,Consolas,monospace;
+  --measure:70ch; --rail:16rem;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground:#141210; --surface:#1C1917; --surface-2:#24201C;
+    --ink:#EFEAE2; --ink-2:#ADA49A; --ink-3:#7C736A;
+    --rule:#332D27; --rule-strong:#4A423A;
+    --accent:#E0A648; --accent-ink:#EFC077; --accent-wash:#2C2313;
+    --pass:#5FBF8C; --pass-wash:#16301F; --fail:#E5796C; --fail-wash:#331A17;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"] {
+  --ground:#141210; --surface:#1C1917; --surface-2:#24201C;
+  --ink:#EFEAE2; --ink-2:#ADA49A; --ink-3:#7C736A;
+  --rule:#332D27; --rule-strong:#4A423A;
+  --accent:#E0A648; --accent-ink:#EFC077; --accent-wash:#2C2313;
+  --pass:#5FBF8C; --pass-wash:#16301F; --fail:#E5796C; --fail-wash:#331A17;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+}
+:root[data-theme="light"] {
+  --ground:#F5F4F2; --surface:#FFFFFF; --surface-2:#EEECE8;
+  --ink:#191714; --ink-2:#57524B; --ink-3:#8A837A;
+  --rule:#DEDAD4; --rule-strong:#C4BEB5;
+  --accent:#A66A00; --accent-ink:#7A4E00; --accent-wash:#F8F0DE;
+  --pass:#216B45; --pass-wash:#E4F0E9; --fail:#A32219; --fail-wash:#F8E6E4;
+  --shadow:0 1px 2px rgba(25,23,20,.05), 0 8px 24px -16px rgba(25,23,20,.28);
+}
+
+* { box-sizing:border-box; }
+body {
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:var(--font-th); font-size:16.5px; line-height:1.85;
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+}
+:where(a){ color:var(--accent-ink); text-decoration-color:color-mix(in srgb, var(--accent) 40%, transparent); text-underline-offset:.22em; }
+:where(a):hover{ text-decoration-color:var(--accent); }
+:where(a,button,input,summary):focus-visible{ outline:2px solid var(--accent); outline-offset:3px; border-radius:3px; }
+
+.page{ display:grid; grid-template-columns:var(--rail) minmax(0,1fr); gap:3.5rem;
+       max-width:78rem; margin:0 auto; padding:0 2rem 6rem; align-items:start; }
+.main{ min-width:0; max-width:var(--measure); }
+@media (max-width:60rem){ .page{ grid-template-columns:minmax(0,1fr); gap:0; padding:0 1.15rem 4rem; } .main{ max-width:none; } }
+
+.masthead{ grid-column:1/-1; border-bottom:1px solid var(--rule);
+           padding:3.5rem 0 2rem; margin-bottom:2.5rem; display:flex; flex-direction:column; gap:.9rem; }
+.masthead__kicker{ font-family:var(--font-mono); font-size:.72rem; letter-spacing:.14em;
+                   text-transform:uppercase; color:var(--ink-3); display:flex; flex-wrap:wrap; gap:.55rem .9rem; align-items:center; }
+.masthead__kicker b{ color:var(--accent-ink); font-weight:600; }
+.masthead__kicker a{ color:var(--ink-3); text-decoration:none; }
+.masthead__kicker a:hover{ color:var(--accent-ink); }
+.masthead h1{ margin:0; font-size:clamp(1.8rem,1.2rem + 2.2vw,2.5rem); line-height:1.35;
+              font-weight:700; letter-spacing:-.005em; text-wrap:balance; }
+.masthead__sub{ margin:0; max-width:56ch; color:var(--ink-2); font-size:1.02rem; }
+
+.toc{ position:sticky; top:2rem; font-size:.875rem; line-height:1.6;
+      border-left:1px solid var(--rule); padding-left:1.1rem; }
+.toc__label{ font-family:var(--font-mono); font-size:.68rem; letter-spacing:.14em;
+             text-transform:uppercase; color:var(--ink-3); margin-bottom:.85rem; }
+.toc ol{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:.1rem; }
+.toc li{ margin:0; }
+.toc a{ display:block; padding:.3rem 0; color:var(--ink-2); text-decoration:none; border-radius:2px; }
+.toc a:hover{ color:var(--ink); }
+.toc a.is-active{ color:var(--accent-ink); font-weight:600; }
+@media (max-width:60rem){
+  .toc{ position:static; border-left:0; border:1px solid var(--rule); border-radius:3px;
+        background:var(--surface); padding:1rem 1.1rem; margin-bottom:2.5rem; }
+  .toc ol{ columns:2; column-gap:1.5rem; }
+  .toc li{ break-inside:avoid; }
+}
+
+h2{ margin:3.4rem 0 1.5rem; padding-bottom:.55rem; border-bottom:2px solid var(--ink);
+    font-size:clamp(1.25rem,1.1rem + .7vw,1.5rem); line-height:1.4; font-weight:700;
+    text-wrap:balance; scroll-margin-top:1.5rem; }
+.main > h2:first-child{ margin-top:0; }
+h3{ margin:2.6rem 0 .9rem; font-size:1.06rem; font-weight:700; line-height:1.5; scroll-margin-top:1.5rem; }
+h4{ margin:1.9rem 0 .6rem; font-size:.95rem; font-weight:700; color:var(--ink-2); }
+p{ margin:0 0 1rem; }
+strong{ font-weight:700; }
+ul,ol{ margin:0 0 1.1rem; padding-left:1.35rem; }
+li{ margin-bottom:.4rem; }
+li:last-child{ margin-bottom:0; }
+li > ul, li > ol { margin-top:.4rem; }
+hr{ border:0; border-top:1px solid var(--rule); margin:2.5rem 0; }
+
+/* ★ ในต้นฉบับ = ระดับความสำคัญ */
+.star{ color:var(--accent); font-size:.9em; }
+
+blockquote{ margin:1.4rem 0; padding:.1rem 0 .1rem 1.1rem;
+            border-left:3px solid var(--rule-strong); color:var(--ink-2); font-size:.96rem; }
+blockquote strong{ color:var(--ink); }
+blockquote > :last-child{ margin-bottom:0; }
+/* blockquote ที่ขึ้นต้นด้วย ★ = คำเตือนสำคัญ */
+blockquote.is-flag{ background:var(--surface); border:1px solid var(--rule);
+                    border-left:4px solid var(--accent); border-radius:2px;
+                    padding:1.05rem 1.25rem; box-shadow:var(--shadow); color:var(--ink); }
+
+.tw{ overflow-x:auto; margin:1.4rem 0; border:1px solid var(--rule); border-radius:3px;
+     background:var(--surface); -webkit-overflow-scrolling:touch; }
+table{ border-collapse:collapse; width:100%; font-size:.93rem; line-height:1.65;
+       font-variant-numeric:tabular-nums; }
+thead th{ background:var(--surface-2); text-align:left; font-weight:700; font-size:.8rem;
+          color:var(--ink-2); padding:.6rem .85rem; border-bottom:1px solid var(--rule-strong); white-space:nowrap; }
+td{ padding:.62rem .85rem; border-bottom:1px solid var(--rule); vertical-align:top; text-align:left; }
+tbody tr:last-child td{ border-bottom:0; }
+td:empty{ min-width:4rem; }
+
+code{ font-family:var(--font-mono); font-size:.875em; background:var(--surface-2);
+      padding:.1em .38em; border-radius:2px; }
+pre{ font-family:var(--font-mono); font-size:.85rem; line-height:1.7; background:var(--surface);
+     border:1px solid var(--rule); border-radius:3px; padding:1rem 1.15rem; margin:1.3rem 0;
+     overflow-x:auto; color:var(--ink); font-variant-numeric:tabular-nums; }
+pre code{ background:none; padding:0; font-size:1em; white-space:pre; }
+
+/* เช็กลิสต์ติ๊กได้ จำสถานะไว้ — ใช้ li.chk เพื่อรองรับรายการซ้อนชั้น */
+ul:has(> li.chk){ list-style:none; margin:1.1rem 0 1.5rem; padding:0; }
+li.chk > ul{ margin:.3rem 0 .5rem 1.8rem; }
+li.chk{ margin:0; }
+li.chk > label{ display:flex; gap:.7rem; align-items:flex-start; padding:.5rem .7rem;
+                border-radius:3px; cursor:pointer; transition:background .12s ease; }
+li.chk > label:hover{ background:var(--surface-2); }
+li.chk input{ appearance:none; flex:0 0 auto; width:1.05rem; height:1.05rem; margin:.38rem 0 0;
+              border:1.5px solid var(--rule-strong); border-radius:2px; background:var(--surface);
+              cursor:pointer; position:relative; }
+li.chk input:checked{ background:var(--pass); border-color:var(--pass); }
+li.chk input:checked::after{ content:""; position:absolute; left:5px; top:1px; width:4px; height:9px;
+                             border:solid var(--surface); border-width:0 2px 2px 0; transform:rotate(42deg); }
+li.chk input:checked + span{ color:var(--ink-3); text-decoration:line-through; text-decoration-thickness:1px; }
+li.chk > label > span{ flex:1; }
+.checks-reset{ font-family:var(--font-mono); font-size:.72rem; letter-spacing:.06em; background:none;
+               border:1px solid var(--rule); border-radius:2px; color:var(--ink-3);
+               padding:.3rem .65rem; cursor:pointer; margin:.4rem 0 1.5rem; display:inline-block; }
+.checks-reset:hover{ color:var(--ink); border-color:var(--rule-strong); }
+
+/* หน้า index */
+.cards{ list-style:none; padding:0; margin:0; display:grid; gap:.65rem; }
+.cards li{ margin:0; }
+.cards a{ display:flex; gap:1rem; align-items:baseline; text-decoration:none; color:inherit;
+          background:var(--surface); border:1px solid var(--rule); border-radius:3px;
+          padding:.9rem 1.1rem; transition:border-color .12s ease, transform .12s ease; }
+.cards a:hover{ border-color:var(--accent); transform:translateX(2px); }
+.cards .n{ font-family:var(--font-mono); font-size:.85rem; color:var(--ink-3); font-variant-numeric:tabular-nums; }
+.cards .t{ font-weight:700; display:block; margin-bottom:.1rem; }
+.cards .d{ color:var(--ink-2); font-size:.92rem; display:block; line-height:1.6; }
+.cards .is-key .t{ color:var(--accent-ink); }
+.cards a.is-key{ border-left:3px solid var(--accent); }
+
+@media print{
+  :root{ --ground:#fff; --surface:#fff; --surface-2:#f2f2f2; --ink:#000; --ink-2:#333; --ink-3:#666;
+         --rule:#bbb; --rule-strong:#888; --accent:#000; --accent-ink:#000; --accent-wash:#f4f4f4; --shadow:none; }
+  body{ font-size:10.5pt; line-height:1.65; }
+  .toc,.checks-reset{ display:none; }
+  .page{ display:block; max-width:none; padding:0; }
+  h2,h3,h4{ page-break-after:avoid; }
+  .tw,pre,blockquote{ page-break-inside:avoid; }
+  a{ text-decoration:none; color:#000; }
+}
+@media (prefers-reduced-motion: reduce){ *{ animation:none !important; transition:none !important; scroll-behavior:auto !important; } }
+html{ scroll-behavior:smooth; }
+</style>
+</head>
+<body data-doc="02-hardware-sizing">
+<div class="page">
+  <header class="masthead">
+    <div class="masthead__kicker">
+      <span>เอกสาร 02</span><span>·</span><span>ระบบดัชนีสืบค้นภาพจากกล้องวงจรปิด</span><span>·</span><a href="index.html"><b>สารบัญทั้งหมด</b></a>
+    </div>
+    <h1>การจัดขนาดเครื่องและพื้นที่จัดเก็บ</h1>
+    
+  </header>
+  <nav class="toc" aria-label="สารบัญ">
+    <div class="toc__label">สารบัญ</div>
+    <ol>
+      <li><a href="#1-เลือกเครื่อง">1. เลือกเครื่อง</a></li>
+      <li><a href="#2-คำนวณภาระประมวลผล">2. คำนวณภาระประมวลผล</a></li>
+      <li><a href="#3-พื้นที่จัดเก็บ">3. พื้นที่จัดเก็บ</a></li>
+      <li><a href="#4-เครือข่าย">4. เครือข่าย</a></li>
+      <li><a href="#5-เมื่อไหร่ที่ต้องอัปเกรด">5. เมื่อไหร่ที่ต้องอัปเกรด</a></li>
+      <li><a href="#เอกสารที่เกี่ยวข้อง">เอกสารที่เกี่ยวข้อง</a></li>
+    </ol>
+  </nav>
+  <main class="main">
+<hr />
+<h2 id="1-เลือกเครื่อง">1. เลือกเครื่อง</h2>
+<p>ระบบวิเคราะห์เฉพาะกล้องจุดคอขวด <strong>2–4 ตัวต่อไซต์</strong> (ดู <a href="10-chokepoint-design.html"><code>10-chokepoint-design.md</code></a>) ภาระประมวลผลจึงต่ำกว่าที่คนส่วนใหญ่คาดมาก — งบเครื่องจึงควรน้อยที่สุดเท่าที่ยังผ่านเกณฑ์ แล้ว <strong>ย้ายส่วนต่างไปลงกล้อง LPR</strong> ซึ่งให้ผลตอบแทนต่อบาทสูงกว่ามาก</p>
+<h3 id="1-1-สี่ทางเลือก">1.1 สี่ทางเลือก</h3>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>ทาง</th>
+<th>ราคาโดยประมาณ</th>
+<th>idle power</th>
+<th>เหมาะกับ</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Micro/Tiny มือสอง (ซีพียูรุ่นลงท้าย T)</strong></td>
+<td><strong>฿5,000–6,500</strong></td>
+<td><strong>~15–18W</strong></td>
+<td><strong>งบจำกัด ต้องการประหยัดไฟ — แนะนำ</strong></td>
+</tr>
+<tr>
+<td>SFF/Tower มือสอง (ซีพียูปกติ)</td>
+<td>฿4,000–5,000</td>
+<td>~20–25W</td>
+<td>งบต่ำสุด ไม่ติดเรื่องขนาดตัวเครื่อง</td>
+</tr>
+<tr>
+<td>N100 / N305 กล่องจีนใหม่</td>
+<td>฿7,800–8,990</td>
+<td>~6–10W</td>
+<td>ไม่อยากยุ่งกับของมือสอง ประหยัดไฟสุด</td>
+</tr>
+<tr>
+<td>Intel i3/i5 12–13th gen ใหม่, RAM 16–32GB</td>
+<td>฿15,000–25,000</td>
+<td>—</td>
+<td>เผื่อเพิ่มกล้องระดับ B ภายหลัง</td>
+</tr>
+</tbody>
+</table></div>
+<blockquote>
+<p>ราคา N100 กล่องจีนในตลาดไทยจริงอยู่ที่ <strong>~฿7,800–8,990</strong> (ตัวเลข ฿7,000 ที่เคยระบุไว้ต่ำกว่าราคาตลาดจริง) แพงกว่า Micro/Tiny มือสองพอสมควร โดยได้เพิ่มมาแค่ idle power ที่ต่ำกว่า ~5–8W ซึ่งคิดเป็นค่าไฟต่างกันไม่ถึง ฿1,000 ตลอด 3 ปี — <strong>ไม่คุ้มกับส่วนต่างราคาที่เอาไปลงกล้อง LPR ได้มากกว่า</strong></p>
+</blockquote>
+<h3 id="1-2-ข้อกำหนดขั้นต่ำที่ห้ามลดลง">1.2 ข้อกำหนดขั้นต่ำที่ห้ามลดลง</h3>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>รายการ</th>
+<th>ค่าขั้นต่ำ</th>
+<th>เหตุผล</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CPU รองรับ <strong>AVX + AVX2</strong></td>
+<td>จำเป็น</td>
+<td>Frigate 0.17 บังคับใช้ และโมเดล ONNX/OpenVINO ต้องใช้</td>
+</tr>
+<tr>
+<td><strong>Intel iGPU</strong> (มี <code>/dev/dri/renderD128</code>)</td>
+<td>จำเป็น — Gen 6 ขึ้นไป</td>
+<td>decode วิดีโอด้วย VAAPI/QSV และรัน detector ผ่าน OpenVINO</td>
+</tr>
+<tr>
+<td>RAM</td>
+<td>8GB ขึ้นไป</td>
+<td>stack ทั้งหมดใช้ราว 6GB (Frigate + Postgres + Redis + indexer) — เพิ่มเป็น 16GB ตอนเข้าเฟส 4 (ใบหน้า)</td>
+</tr>
+<tr>
+<td>ที่เก็บข้อมูลระบบ</td>
+<td>SSD (SATA หรือ NVMe)</td>
+<td>Postgres เขียนบ่อย — <strong>ห้ามลง OS/DB บน HDD</strong></td>
+</tr>
+<tr>
+<td>Ethernet</td>
+<td>Gigabit</td>
+<td></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="1-3-กับดักตอนซื้อมือสอง-ซีพียูไม่มี-avx2">1.3 <span class="star">★</span><span class="star">★</span> กับดักตอนซื้อมือสอง: ซีพียูไม่มี AVX2</h3>
+<p>ซีพียูตระกูลประหยัดไฟราคาถูกหลายรุ่นที่เจอบ่อยตามร้านมือสอง <strong>ไม่มี AVX2</strong> และ <strong>รัน Frigate 0.17 ไม่ได้เลย</strong></p>
+<div class="tw"><table>
+<thead>
+<tr>
+<th><span class="star">★</span> ห้ามซื้อ</th>
+<th>สถาปัตยกรรม</th>
+<th>ปัญหา</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Celeron J4125 / J4105</td>
+<td>Gemini Lake</td>
+<td>ไม่มี AVX2</td>
+</tr>
+<tr>
+<td>Celeron N5105 / N5095</td>
+<td>Jasper Lake</td>
+<td>ไม่มี AVX2</td>
+</tr>
+<tr>
+<td>Celeron J1900 / N3350 / N4000</td>
+<td>รุ่นเก่ากว่า</td>
+<td>ไม่มี AVX2</td>
+</tr>
+</tbody>
+</table></div>
+<p>ซีพียูกลุ่มนี้มักโผล่มาเป็นอันดับแรกเวลาค้นหา &quot;mini pc ราคาถูก&quot; เพราะราคาล่อใจมาก (~฿3,000–5,000) แต่ซื้อมาแล้วใช้กับระบบนี้ไม่ได้เลย <strong>ต้องเช็กรุ่นซีพียูให้ชัดก่อนโอนเงินทุกครั้ง</strong></p>
+<h3 id="1-4-วิธีได้เครื่องประหยัดไฟในงบจำกัด-มองหาเลข-t-ต่อท้าย">1.4 <span class="star">★</span> วิธีได้เครื่องประหยัดไฟในงบจำกัด: มองหาเลข &quot;T&quot; ต่อท้าย</h3>
+<p>ซีพียู Intel สายธุรกิจ (OptiPlex / ThinkCentre / EliteDesk) มีสองเวอร์ชันสเปกเดียวกัน ต่างแค่ TDP:</p>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>รุ่น</th>
+<th>ตัวอย่าง</th>
+<th>TDP</th>
+<th>ใช้ในฟอร์มแฟกเตอร์</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ปกติ</td>
+<td>i5-8400</td>
+<td>65W</td>
+<td>SFF / Tower — ตัวใหญ่</td>
+</tr>
+<tr>
+<td><strong>ลงท้าย T</strong></td>
+<td><strong>i5-8500T</strong></td>
+<td><strong>35W</strong></td>
+<td><strong>Micro / Tiny / Mini — ตัวเล็ก</strong></td>
+</tr>
+</tbody>
+</table></div>
+<p>วัดจริงจาก <a href="https://www.servethehome.com/dell-optiplex-7060-micro-tinyminimicro-at-65w-tdp-cpu-overview/3/">ServeTheHome</a>: Dell OptiPlex Micro กับ i5-8500T กิน <strong>idle ~18W</strong> เทียบ SFF ตัวปกติ ~20–25W และตัวเรือนเล็กพอวางในตู้ควบคุมหน้าประตูได้</p>
+<p><strong>รุ่นที่ควรมองหา (มือสองในไทย)</strong></p>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>ตระกูล</th>
+<th>รุ่น</th>
+<th>ซีพียูที่ต้องการ</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Dell OptiPlex <strong>Micro</strong></td>
+<td>3060 / 5060 / 7060 / 3070 / 5070 Micro</td>
+<td>i5-6500T / 7500T / 8500T / 9500T</td>
+</tr>
+<tr>
+<td>Lenovo ThinkCentre <strong>Tiny</strong></td>
+<td>M720q / M920q / M70q</td>
+<td>i5-6500T / 8500T / 9500T</td>
+</tr>
+<tr>
+<td>HP EliteDesk/ProDesk <strong>Mini</strong></td>
+<td>800 G3 / G4 / G5 Mini</td>
+<td>i5-6500T / 8500T / 9500T</td>
+</tr>
+</tbody>
+</table></div>
+<p>ทุกตัวมี iGPU UHD 630 หรือใกล้เคียง ผ่านเกณฑ์ AVX2 + OpenVINO เหมือนกันหมด</p>
+<p><strong>คำค้นหาที่ใช้ได้ผล</strong> — ร้านมือสองไทยมักไม่เขียนคำว่า &quot;Micro&quot;/&quot;Tiny&quot; ตรง ๆ ลองค้น:</p>
+<pre><code>optiplex micro มือสอง
+thinkcentre tiny มือสอง
+elitedesk mini มือสอง
+mini pc ออฟฟิศ i5 8500t
+</code></pre>
+<p>ดูได้ทั้ง Facebook Marketplace, กลุ่มคอมมือสอง, ร้านมือสองแถวบ้านหม้อ/พันทิปพลาซ่า — เป็นของเหลือจากองค์กรที่เปลี่ยนรอบเครื่อง เข้าตลาดมือสองสม่ำเสมอ</p>
+<h3 id="1-5-เช็กลิสต์ก่อนซื้อมือสอง">1.5 <span class="star">★</span> เช็กลิสต์ก่อนซื้อมือสอง</h3>
+<ul>
+<li class="chk"><label><input type="checkbox"><span><strong>ขอรุ่นซีพียูให้ชัด</strong> — ต้องไม่ใช่รุ่นในตาราง 1.3 และถ้าต้องการประหยัดไฟต้องลงท้าย T</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ถ้าคนขายไม่รู้รุ่น ขอ <strong>Service Tag</strong> (Dell) หรือชื่อรุ่นเครื่องแล้วเช็กสเปกจากเว็บผู้ผลิตเอง — อย่าเชื่อคำว่า &quot;รุ่นใหม่&quot; เฉย ๆ</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ฟอร์มแฟกเตอร์ต้องเป็น <strong>Micro/Tiny/Mini</strong> ถ้าต้องการประหยัดไฟ (ไม่ใช่ SFF/Tower)</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>มีช่อง <strong>M.2 NVMe หรือ SATA</strong> สำหรับใส่ SSD เพิ่ม (ถ้าไม่มี M.2 ใช้ SATA SSD แทนได้)</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>RAM กี่แถว เหลือช่องว่างกี่ช่องสำหรับอัปเกรดภายหลัง</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ถ้ามี SSD/HDD ติดมา <strong>ขอดูค่า SMART</strong> — ชั่วโมงใช้งาน, reallocated sector</span></label></li>
+</ul>
+<h3 id="1-6-กรณี-hdd-ติดเครื่องมาด้วย">1.6 กรณี HDD ติดเครื่องมาด้วย</h3>
+<p>ไม่ต้องทิ้ง — ใช้แยกหน้าที่กับ SSD ที่ซื้อเพิ่มตามหลักการในหัวข้อ 3.4:</p>
+<pre><code>SSD (ซื้อเพิ่ม)   →  OS + Postgres + crop     ← ต้องเร็ว
+HDD (ติดมากับเครื่อง) →  คลิปวิดีโอ /data/media   ← เขียนเรียง ไม่ต้องเร็ว
+</code></pre>
+<h3 id="1-7-ควรใช้งบไปกับอะไร">1.7 <span class="star">★</span> ควรใช้งบไปกับอะไร</h3>
+<pre><code>งบต่อไซต์ ~฿27,000 (เครื่องมือสองประหยัดไฟ + SSD)
+
+   เครื่องประมวลผล    ▓▓                          ~฿6,000   (22%)
+   กล้อง LPR + ไฟ      ▓▓▓▓▓▓▓▓▓▓▓▓▓             ~฿15,000  (56%)
+   งานติดตั้ง/โยธา     ▓▓▓▓▓▓                     ~฿6,000   (22%)
+</code></pre>
+<p><strong>การประหยัดค่ากล้อง LPR ลง ฿3,000 แล้วทำให้ความแม่นตกจาก 95% เหลือ 75% ไม่คุ้ม</strong> เพราะทำให้ทั้งระบบเสียคุณค่า — ในขณะที่การเปลี่ยนเครื่องประมวลผลจากมือสองประหยัดงบเป็นรุ่นแพงกว่า แทบไม่ช่วยอะไรเลยเมื่อมีแค่ 3 กล้อง</p>
+<hr />
+<h2 id="2-คำนวณภาระประมวลผล">2. คำนวณภาระประมวลผล</h2>
+<h3 id="2-1-frigate-ทำงานต่อเฟรม">2.1 Frigate (ทำงานต่อเฟรม)</h3>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>งาน</th>
+<th>ต้นทุน</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>decode substream 640×480</td>
+<td>~2–3% CPU ต่อกล้อง (ผ่าน iGPU)</td>
+</tr>
+<tr>
+<td>motion detection</td>
+<td>~1–2% CPU ต่อกล้อง</td>
+</tr>
+<tr>
+<td>object detection (OpenVINO, ทำเฉพาะตอนมี motion)</td>
+<td>10–20 ms ต่อครั้ง</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>สูตรประมาณ</strong></p>
+<pre><code>inference ต่อวินาที = จำนวนกล้อง × detect_fps × สัดส่วนเวลาที่มี motion
+</code></pre>
+<p>ตัวอย่างที่ประตูโกดัง: 3 กล้อง × 5 fps × 20% (มีรถผ่านเป็นช่วง ๆ) = <strong>3 inference/วินาที</strong>
+ความสามารถของเครื่องระดับเริ่มต้น (N100 หรือ Micro/Tiny มือสอง i5-T series) ≈ 50–100 inference/วินาที → <strong>เหลือหัวเยอะมาก</strong></p>
+<blockquote>
+<p>ตัวเลขในหัวข้อนี้อิงจาก N100 (4 E-core) เป็นกรณีระวังที่สุด — ถ้าใช้เครื่องมือสอง i5-*T (6 คอร์จริง) ตามหัวข้อ 1.4 จะเร็วกว่านี้พอสมควร</p>
+</blockquote>
+<h3 id="2-2-indexer-ทำงานต่อเหตุการณ์-ไม่ใช่ต่อเฟรม">2.2 Indexer (ทำงานต่อเหตุการณ์ ไม่ใช่ต่อเฟรม)</h3>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>งาน</th>
+<th>เวลาต่อครั้งบนเครื่องระดับเริ่มต้น (N100)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>face detect + ArcFace embedding</td>
+<td>40–60 ms</td>
+</tr>
+<tr>
+<td>vehicle attributes + re-ID</td>
+<td>~20 ms</td>
+</tr>
+<tr>
+<td>plate detect + Thai OCR</td>
+<td>150–300 ms</td>
+</tr>
+<tr>
+<td><strong>รวมต่อ 1 เหตุการณ์รถ</strong></td>
+<td><strong>~200–350 ms</strong></td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>ปริมาณงานจริงที่โกดัง:</strong> สมมติรถเข้า-ออก 300 คัน/วัน + คนเดิน 200 คน/วัน
+→ ~500 เหตุการณ์/วัน × 0.3 วินาที = <strong>~2.5 นาทีของงาน AI ต่อวัน</strong></p>
+<blockquote>
+<p>นี่คือเหตุผลที่ event-driven ทำให้ CPU-only เป็นไปได้ — เครื่องว่างเกือบตลอดเวลา</p>
+</blockquote>
+<h3 id="2-3-ตัวชี้วัดที่ต้องเฝ้าดู">2.3 ตัวชี้วัดที่ต้องเฝ้าดู</h3>
+<p>ดูที่ <code>http://&lt;ip&gt;:5000/api/stats</code></p>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>ตัวชี้วัด</th>
+<th>เกณฑ์</th>
+<th>ถ้าไม่ผ่านแปลว่า</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>inference_speed</code></td>
+<td>&lt; 25 ms</td>
+<td>detector ช้าเกิน — ตรวจว่าใช้ iGPU จริงไหม</td>
+</tr>
+<tr>
+<td><code>camera_fps</code></td>
+<td>ตรงกับที่ตั้ง</td>
+<td>กล้องส่งไม่ทัน หรือเครือข่ายมีปัญหา</td>
+</tr>
+<tr>
+<td><strong><code>skipped_fps</code></strong></td>
+<td><strong>= 0</strong></td>
+<td><strong>เครื่องไม่ไหว — ต้องลด fps หรือเพิ่มเครื่อง</strong></td>
+</tr>
+<tr>
+<td><code>detection_fps</code></td>
+<td>ตามความหนาแน่นจริง</td>
+<td>ถ้าสูงผิดปกติ = motion mask ตั้งไม่ดี</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<h2 id="3-พื้นที่จัดเก็บ">3. พื้นที่จัดเก็บ</h2>
+<h3 id="3-1-ต่อไซต์-3-กล้องจุดคอขวด">3.1 ต่อไซต์ (3 กล้องจุดคอขวด)</h3>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>ข้อมูล</th>
+<th>สูตรคำนวณ</th>
+<th>ประมาณการ</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>คลิป HD เฉพาะเหตุการณ์ที่ประตู</td>
+<td>300 เหตุการณ์/วัน × 20 วิ × 4 Mbps ≈ 3 GB/วัน</td>
+<td><strong>~270 GB ที่ 90 วัน</strong></td>
+</tr>
+<tr>
+<td>snapshot เต็มเฟรม</td>
+<td>500/วัน × 300 KB ≈ 150 MB/วัน</td>
+<td>~55 GB ที่ 1 ปี</td>
+</tr>
+<tr>
+<td>crop (หน้า/รถ/ป้าย)</td>
+<td>1,500/วัน × 40 KB ≈ 60 MB/วัน</td>
+<td>~22 GB ที่ 1 ปี</td>
+</tr>
+<tr>
+<td>Postgres (metadata)</td>
+<td>~2 KB/เหตุการณ์</td>
+<td>~1 GB ที่ 1 ปี</td>
+</tr>
+<tr>
+<td>embedding</td>
+<td>512-d float32 = 2 KB + index</td>
+<td>~5 GB ที่ 1 ปี</td>
+</tr>
+<tr>
+<td><strong>รวม</strong></td>
+<td></td>
+<td><strong>~350 GB → NVMe 1TB เพียงพอมาก</strong></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="3-2-สูตรสำหรับคำนวณไซต์ของคุณเอง">3.2 สูตรสำหรับคำนวณไซต์ของคุณเอง</h3>
+<pre><code>พื้นที่ต่อวัน (GB) ≈
+      (เหตุการณ์รถต่อวัน × ความยาวคลิป(วิ) × bitrate(Mbps) ÷ 8000)      ← คลิป
+    + (เหตุการณ์ทั้งหมดต่อวัน × 0.3 MB ÷ 1000)                          ← snapshot
+    + (เหตุการณ์ทั้งหมดต่อวัน × 3 × 0.04 MB ÷ 1000)                     ← crop
+    + (เหตุการณ์ทั้งหมดต่อวัน × 0.01 MB ÷ 1000)                         ← DB + embedding
+
+พื้นที่ที่ต้องมี = พื้นที่ต่อวัน × วันที่เก็บ × 1.3   (เผื่อ 30%)
+</code></pre>
+<p><strong>ตัวอย่างโกดังที่รถเข้าออกหนาแน่น</strong> (1,000 คัน/วัน, เก็บ 180 วัน)</p>
+<pre><code>คลิป:     1000 × 20 × 4 ÷ 8000     = 10.0 GB/วัน
+snapshot: 1500 × 0.3 ÷ 1000        =  0.45 GB/วัน
+crop:     1500 × 3 × 0.04 ÷ 1000   =  0.18 GB/วัน
+DB:                                ≈  0.02 GB/วัน
+รวม ≈ 10.65 GB/วัน × 180 วัน × 1.3 = ~2.5 TB   → ต้องใช้ NVMe 4TB
+</code></pre>
+<h3 id="3-3-ปุ่มปรับที่ประหยัดพื้นที่ได้มากที่สุด">3.3 <span class="star">★</span> ปุ่มปรับที่ประหยัดพื้นที่ได้มากที่สุด</h3>
+<p>เรียงตามผลกระทบ:</p>
+<ol>
+<li><strong>ลดวันเก็บคลิป HD</strong> (เก็บ 30 วันแทน 90) — ลดได้ ~65% เพราะคลิปกินพื้นที่ 80% ของทั้งหมด</li>
+<li><strong>บันทึกคลิปเฉพาะ <code>alert</code> ไม่บันทึก <code>detection</code></strong> — ตัดเหตุการณ์ที่ไม่สำคัญออก</li>
+<li><strong>ลดความยาวคลิปเป็น 10 วินาที</strong> — แค่พอยืนยันว่าใช่เหตุการณ์ที่หา แล้วไปดูเต็มที่ NVR</li>
+<li><strong>ไม่บันทึกคลิปเลย เก็บแค่ snapshot</strong> — เหลือ ~1 GB/วัน แต่ผู้ใช้ต้องไป NVR ทุกครั้ง</li>
+</ol>
+<blockquote>
+<p><strong>snapshot, crop และ embedding กินพื้นที่น้อยมาก จึงควรเก็บยาว (1 ปีขึ้นไป)</strong>
+ส่วนคลิปคือตัวที่ควรตัด เพราะ NVR มีของจริงอยู่แล้ว</p>
+</blockquote>
+<h3 id="3-4-การจัดพาร์ทิชัน">3.4 การจัดพาร์ทิชัน</h3>
+<pre><code>/            50 GB    ระบบปฏิบัติการ
+/var/lib/docker   100 GB    image และ volume
+/data/postgres    100 GB    ฐานข้อมูล (NVMe)
+/data/media       ที่เหลือ  คลิป snapshot crop
+</code></pre>
+<p>ตั้ง alert เมื่อพื้นที่เหลือ &lt; 15% (ดู <a href="07-operations.html"><code>07-operations.md</code></a>)</p>
+<hr />
+<h2 id="4-เครือข่าย">4. เครือข่าย</h2>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>รายการ</th>
+<th>ประมาณการ</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>substream ต่อกล้อง (detect)</td>
+<td>~1 Mbps</td>
+</tr>
+<tr>
+<td>mainstream ต่อกล้อง (บันทึกเหตุการณ์)</td>
+<td>~4 Mbps</td>
+</tr>
+<tr>
+<td><strong>รวม 3 กล้องจุดคอขวด</strong></td>
+<td><strong>~15 Mbps</strong></td>
+</tr>
+</tbody>
+</table></div>
+<p>ไม่เป็นภาระต่อเครือข่ายโกดังทั่วไป <strong>แต่ต้องระวัง:</strong> NVR ก็ดึง mainstream จากกล้องเดียวกันอยู่แล้ว → <strong>กล้องต้องรองรับ RTSP session พร้อมกันได้อย่างน้อย 2 ตัว</strong> ทดสอบข้อนี้ตอนสำรวจ (ดู <a href="03-camera-onboarding.html"><code>03-camera-onboarding.md</code></a>)</p>
+<hr />
+<h2 id="5-เมื่อไหร่ที่ต้องอัปเกรด">5. เมื่อไหร่ที่ต้องอัปเกรด</h2>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>อาการ</th>
+<th>สาเหตุที่น่าจะเป็น</th>
+<th>ทางแก้ตามลำดับ</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>skipped_fps</code> &gt; 0</td>
+<td>detector ไม่ทัน</td>
+<td>1. ลด detect_fps เป็น 3 &lt;br&gt; 2. ปรับ motion mask ให้แคบลง &lt;br&gt; 3. เพิ่ม Coral TPU (~฿1,500) &lt;br&gt; 4. เปลี่ยนเครื่อง</td>
+</tr>
+<tr>
+<td>indexer ทำงานไม่ทัน (Redis Stream ค้างสะสม)</td>
+<td>เหตุการณ์เยอะเกิน</td>
+<td>เพิ่มจำนวน worker ใน compose</td>
+</tr>
+<tr>
+<td>ค้นหาช้า &gt; 2 วินาที</td>
+<td>index ไม่ถูกใช้ หรือข้อมูลโตเกิน</td>
+<td>1. ตรวจ <code>EXPLAIN ANALYZE</code> &lt;br&gt; 2. ปรับพารามิเตอร์ HNSW &lt;br&gt; 3. เพิ่ม RAM</td>
+</tr>
+<tr>
+<td>พื้นที่เต็ม</td>
+<td>retention ยาวเกิน</td>
+<td>ดูหัวข้อ 3.3</td>
+</tr>
+</tbody>
+</table></div>
+<blockquote>
+<p><strong>ในทางปฏิบัติ ไซต์ที่มี 3 กล้องจุดคอขวดแทบไม่มีทางชนเพดานของเครื่องระดับเริ่มต้นเลย</strong> ไม่ว่าจะเป็น N100 หรือ Micro/Tiny มือสอง
+ถ้าชน ให้ตรวจการตั้งค่าก่อนสรุปว่าเครื่องไม่พอ — สาเหตุที่พบบ่อยที่สุดคือ motion mask ตั้งไม่ดีทำให้ detector ทำงานตลอดเวลาโดยไม่จำเป็น</p>
+</blockquote>
+<hr />
+<h2 id="เอกสารที่เกี่ยวข้อง">เอกสารที่เกี่ยวข้อง</h2>
+<ul>
+<li><a href="10-chokepoint-design.html"><code>10-chokepoint-design.md</code></a> — จำนวนและบทบาทของกล้อง</li>
+<li><a href="07-operations.html"><code>07-operations.md</code></a> — การเฝ้าระวังและ retention</li>
+<li><a href="09-multi-site-runbook.html"><code>09-multi-site-runbook.md</code></a> — การเตรียมเครื่องที่ไซต์</li>
+</ul>
+
+<button class="checks-reset" type="button">ล้างเครื่องหมายทั้งหมด</button>
+
+  </main>
+</div>
+<script>
+(function () {
+  "use strict";
+  var KEY = "docs-checks-" + (document.body.getAttribute("data-doc") || "x");
+  var boxes = Array.prototype.slice.call(document.querySelectorAll("li.chk input"));
+  var saved = {};
+  try { saved = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { saved = {}; }
+  boxes.forEach(function (box, i) {
+    if (saved[i]) box.checked = true;
+    box.addEventListener("change", function () {
+      saved[i] = box.checked;
+      try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch (e) {}
+    });
+  });
+  var reset = document.querySelector(".checks-reset");
+  if (reset) reset.addEventListener("click", function () {
+    boxes.forEach(function (b) { b.checked = false; });
+    saved = {};
+    try { localStorage.removeItem(KEY); } catch (e) {}
+  });
+
+  var links = {};
+  Array.prototype.forEach.call(document.querySelectorAll(".toc a"), function (a) {
+    links[a.getAttribute("href").slice(1)] = a;
+  });
+  var heads = document.querySelectorAll(".main h2");
+  if (!heads.length || !window.IntersectionObserver) return;
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      var link = links[e.target.id];
+      if (!link || !e.isIntersecting) return;
+      Object.keys(links).forEach(function (k) { links[k].classList.remove("is-active"); });
+      link.classList.add("is-active");
+    });
+  }, { rootMargin: "-8% 0px -80% 0px" });
+  Array.prototype.forEach.call(heads, function (h) { io.observe(h); });
+})();
+</script>
+</body>
+</html>

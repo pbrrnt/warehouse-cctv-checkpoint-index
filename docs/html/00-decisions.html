@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>00 — บันทึกการตัดสินใจ (Decision Log) — ระบบดัชนีสืบค้นภาพ</title>
+<style>
+:root {
+  --ground:#F5F4F2; --surface:#FFFFFF; --surface-2:#EEECE8;
+  --ink:#191714; --ink-2:#57524B; --ink-3:#8A837A;
+  --rule:#DEDAD4; --rule-strong:#C4BEB5;
+  --accent:#A66A00; --accent-ink:#7A4E00; --accent-wash:#F8F0DE;
+  --pass:#216B45; --pass-wash:#E4F0E9; --fail:#A32219; --fail-wash:#F8E6E4;
+  --shadow:0 1px 2px rgba(25,23,20,.05), 0 8px 24px -16px rgba(25,23,20,.28);
+  --font-th:"Leelawadee UI","Noto Sans Thai","Thonburi","Sarabun","Segoe UI",Tahoma,system-ui,sans-serif;
+  --font-mono:ui-monospace,"SF Mono","Cascadia Mono","Segoe UI Mono","Roboto Mono",Menlo,Consolas,monospace;
+  --measure:70ch; --rail:16rem;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground:#141210; --surface:#1C1917; --surface-2:#24201C;
+    --ink:#EFEAE2; --ink-2:#ADA49A; --ink-3:#7C736A;
+    --rule:#332D27; --rule-strong:#4A423A;
+    --accent:#E0A648; --accent-ink:#EFC077; --accent-wash:#2C2313;
+    --pass:#5FBF8C; --pass-wash:#16301F; --fail:#E5796C; --fail-wash:#331A17;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"] {
+  --ground:#141210; --surface:#1C1917; --surface-2:#24201C;
+  --ink:#EFEAE2; --ink-2:#ADA49A; --ink-3:#7C736A;
+  --rule:#332D27; --rule-strong:#4A423A;
+  --accent:#E0A648; --accent-ink:#EFC077; --accent-wash:#2C2313;
+  --pass:#5FBF8C; --pass-wash:#16301F; --fail:#E5796C; --fail-wash:#331A17;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+}
+:root[data-theme="light"] {
+  --ground:#F5F4F2; --surface:#FFFFFF; --surface-2:#EEECE8;
+  --ink:#191714; --ink-2:#57524B; --ink-3:#8A837A;
+  --rule:#DEDAD4; --rule-strong:#C4BEB5;
+  --accent:#A66A00; --accent-ink:#7A4E00; --accent-wash:#F8F0DE;
+  --pass:#216B45; --pass-wash:#E4F0E9; --fail:#A32219; --fail-wash:#F8E6E4;
+  --shadow:0 1px 2px rgba(25,23,20,.05), 0 8px 24px -16px rgba(25,23,20,.28);
+}
+
+* { box-sizing:border-box; }
+body {
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:var(--font-th); font-size:16.5px; line-height:1.85;
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+}
+:where(a){ color:var(--accent-ink); text-decoration-color:color-mix(in srgb, var(--accent) 40%, transparent); text-underline-offset:.22em; }
+:where(a):hover{ text-decoration-color:var(--accent); }
+:where(a,button,input,summary):focus-visible{ outline:2px solid var(--accent); outline-offset:3px; border-radius:3px; }
+
+.page{ display:grid; grid-template-columns:var(--rail) minmax(0,1fr); gap:3.5rem;
+       max-width:78rem; margin:0 auto; padding:0 2rem 6rem; align-items:start; }
+.main{ min-width:0; max-width:var(--measure); }
+@media (max-width:60rem){ .page{ grid-template-columns:minmax(0,1fr); gap:0; padding:0 1.15rem 4rem; } .main{ max-width:none; } }
+
+.masthead{ grid-column:1/-1; border-bottom:1px solid var(--rule);
+           padding:3.5rem 0 2rem; margin-bottom:2.5rem; display:flex; flex-direction:column; gap:.9rem; }
+.masthead__kicker{ font-family:var(--font-mono); font-size:.72rem; letter-spacing:.14em;
+                   text-transform:uppercase; color:var(--ink-3); display:flex; flex-wrap:wrap; gap:.55rem .9rem; align-items:center; }
+.masthead__kicker b{ color:var(--accent-ink); font-weight:600; }
+.masthead__kicker a{ color:var(--ink-3); text-decoration:none; }
+.masthead__kicker a:hover{ color:var(--accent-ink); }
+.masthead h1{ margin:0; font-size:clamp(1.8rem,1.2rem + 2.2vw,2.5rem); line-height:1.35;
+              font-weight:700; letter-spacing:-.005em; text-wrap:balance; }
+.masthead__sub{ margin:0; max-width:56ch; color:var(--ink-2); font-size:1.02rem; }
+
+.toc{ position:sticky; top:2rem; font-size:.875rem; line-height:1.6;
+      border-left:1px solid var(--rule); padding-left:1.1rem; }
+.toc__label{ font-family:var(--font-mono); font-size:.68rem; letter-spacing:.14em;
+             text-transform:uppercase; color:var(--ink-3); margin-bottom:.85rem; }
+.toc ol{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:.1rem; }
+.toc li{ margin:0; }
+.toc a{ display:block; padding:.3rem 0; color:var(--ink-2); text-decoration:none; border-radius:2px; }
+.toc a:hover{ color:var(--ink); }
+.toc a.is-active{ color:var(--accent-ink); font-weight:600; }
+@media (max-width:60rem){
+  .toc{ position:static; border-left:0; border:1px solid var(--rule); border-radius:3px;
+        background:var(--surface); padding:1rem 1.1rem; margin-bottom:2.5rem; }
+  .toc ol{ columns:2; column-gap:1.5rem; }
+  .toc li{ break-inside:avoid; }
+}
+
+h2{ margin:3.4rem 0 1.5rem; padding-bottom:.55rem; border-bottom:2px solid var(--ink);
+    font-size:clamp(1.25rem,1.1rem + .7vw,1.5rem); line-height:1.4; font-weight:700;
+    text-wrap:balance; scroll-margin-top:1.5rem; }
+.main > h2:first-child{ margin-top:0; }
+h3{ margin:2.6rem 0 .9rem; font-size:1.06rem; font-weight:700; line-height:1.5; scroll-margin-top:1.5rem; }
+h4{ margin:1.9rem 0 .6rem; font-size:.95rem; font-weight:700; color:var(--ink-2); }
+p{ margin:0 0 1rem; }
+strong{ font-weight:700; }
+ul,ol{ margin:0 0 1.1rem; padding-left:1.35rem; }
+li{ margin-bottom:.4rem; }
+li:last-child{ margin-bottom:0; }
+li > ul, li > ol { margin-top:.4rem; }
+hr{ border:0; border-top:1px solid var(--rule); margin:2.5rem 0; }
+
+/* ★ ในต้นฉบับ = ระดับความสำคัญ */
+.star{ color:var(--accent); font-size:.9em; }
+
+blockquote{ margin:1.4rem 0; padding:.1rem 0 .1rem 1.1rem;
+            border-left:3px solid var(--rule-strong); color:var(--ink-2); font-size:.96rem; }
+blockquote strong{ color:var(--ink); }
+blockquote > :last-child{ margin-bottom:0; }
+/* blockquote ที่ขึ้นต้นด้วย ★ = คำเตือนสำคัญ */
+blockquote.is-flag{ background:var(--surface); border:1px solid var(--rule);
+                    border-left:4px solid var(--accent); border-radius:2px;
+                    padding:1.05rem 1.25rem; box-shadow:var(--shadow); color:var(--ink); }
+
+.tw{ overflow-x:auto; margin:1.4rem 0; border:1px solid var(--rule); border-radius:3px;
+     background:var(--surface); -webkit-overflow-scrolling:touch; }
+table{ border-collapse:collapse; width:100%; font-size:.93rem; line-height:1.65;
+       font-variant-numeric:tabular-nums; }
+thead th{ background:var(--surface-2); text-align:left; font-weight:700; font-size:.8rem;
+          color:var(--ink-2); padding:.6rem .85rem; border-bottom:1px solid var(--rule-strong); white-space:nowrap; }
+td{ padding:.62rem .85rem; border-bottom:1px solid var(--rule); vertical-align:top; text-align:left; }
+tbody tr:last-child td{ border-bottom:0; }
+td:empty{ min-width:4rem; }
+
+code{ font-family:var(--font-mono); font-size:.875em; background:var(--surface-2);
+      padding:.1em .38em; border-radius:2px; }
+pre{ font-family:var(--font-mono); font-size:.85rem; line-height:1.7; background:var(--surface);
+     border:1px solid var(--rule); border-radius:3px; padding:1rem 1.15rem; margin:1.3rem 0;
+     overflow-x:auto; color:var(--ink); font-variant-numeric:tabular-nums; }
+pre code{ background:none; padding:0; font-size:1em; white-space:pre; }
+
+/* เช็กลิสต์ติ๊กได้ จำสถานะไว้ — ใช้ li.chk เพื่อรองรับรายการซ้อนชั้น */
+ul:has(> li.chk){ list-style:none; margin:1.1rem 0 1.5rem; padding:0; }
+li.chk > ul{ margin:.3rem 0 .5rem 1.8rem; }
+li.chk{ margin:0; }
+li.chk > label{ display:flex; gap:.7rem; align-items:flex-start; padding:.5rem .7rem;
+                border-radius:3px; cursor:pointer; transition:background .12s ease; }
+li.chk > label:hover{ background:var(--surface-2); }
+li.chk input{ appearance:none; flex:0 0 auto; width:1.05rem; height:1.05rem; margin:.38rem 0 0;
+              border:1.5px solid var(--rule-strong); border-radius:2px; background:var(--surface);
+              cursor:pointer; position:relative; }
+li.chk input:checked{ background:var(--pass); border-color:var(--pass); }
+li.chk input:checked::after{ content:""; position:absolute; left:5px; top:1px; width:4px; height:9px;
+                             border:solid var(--surface); border-width:0 2px 2px 0; transform:rotate(42deg); }
+li.chk input:checked + span{ color:var(--ink-3); text-decoration:line-through; text-decoration-thickness:1px; }
+li.chk > label > span{ flex:1; }
+.checks-reset{ font-family:var(--font-mono); font-size:.72rem; letter-spacing:.06em; background:none;
+               border:1px solid var(--rule); border-radius:2px; color:var(--ink-3);
+               padding:.3rem .65rem; cursor:pointer; margin:.4rem 0 1.5rem; display:inline-block; }
+.checks-reset:hover{ color:var(--ink); border-color:var(--rule-strong); }
+
+/* หน้า index */
+.cards{ list-style:none; padding:0; margin:0; display:grid; gap:.65rem; }
+.cards li{ margin:0; }
+.cards a{ display:flex; gap:1rem; align-items:baseline; text-decoration:none; color:inherit;
+          background:var(--surface); border:1px solid var(--rule); border-radius:3px;
+          padding:.9rem 1.1rem; transition:border-color .12s ease, transform .12s ease; }
+.cards a:hover{ border-color:var(--accent); transform:translateX(2px); }
+.cards .n{ font-family:var(--font-mono); font-size:.85rem; color:var(--ink-3); font-variant-numeric:tabular-nums; }
+.cards .t{ font-weight:700; display:block; margin-bottom:.1rem; }
+.cards .d{ color:var(--ink-2); font-size:.92rem; display:block; line-height:1.6; }
+.cards .is-key .t{ color:var(--accent-ink); }
+.cards a.is-key{ border-left:3px solid var(--accent); }
+
+@media print{
+  :root{ --ground:#fff; --surface:#fff; --surface-2:#f2f2f2; --ink:#000; --ink-2:#333; --ink-3:#666;
+         --rule:#bbb; --rule-strong:#888; --accent:#000; --accent-ink:#000; --accent-wash:#f4f4f4; --shadow:none; }
+  body{ font-size:10.5pt; line-height:1.65; }
+  .toc,.checks-reset{ display:none; }
+  .page{ display:block; max-width:none; padding:0; }
+  h2,h3,h4{ page-break-after:avoid; }
+  .tw,pre,blockquote{ page-break-inside:avoid; }
+  a{ text-decoration:none; color:#000; }
+}
+@media (prefers-reduced-motion: reduce){ *{ animation:none !important; transition:none !important; scroll-behavior:auto !important; } }
+html{ scroll-behavior:smooth; }
+</style>
+</head>
+<body data-doc="00-decisions">
+<div class="page">
+  <header class="masthead">
+    <div class="masthead__kicker">
+      <span>เอกสาร 00</span><span>·</span><span>ระบบดัชนีสืบค้นภาพจากกล้องวงจรปิด</span><span>·</span><a href="index.html"><b>สารบัญทั้งหมด</b></a>
+    </div>
+    <h1>บันทึกการตัดสินใจ (Decision Log)</h1>
+    <p class="masthead__sub">บันทึกว่า <strong>ทำไม</strong> ระบบถึงเป็นแบบนี้ เพื่อให้คนที่มาดูแลต่อเข้าใจโดยไม่ต้องเดา เมื่อมีการตัดสินใจใหม่หรือกลับคำตัดสินใจเดิม ให้เพิ่มรายการที่ท้ายไฟล์ <strong>อย่าลบของเดิม</strong></p>
+  </header>
+  <nav class="toc" aria-label="สารบัญ">
+    <div class="toc__label">สารบัญ</div>
+    <ol>
+      <li><a href="#adr-001-ต่อยอด-frigate-แทนเขียน-pipeline-วิดีโอเอง">ADR-001 — ต่อยอด Frigate แทนเขียน pipeline วิดีโอเอง</a></li>
+      <li><a href="#adr-002-ปิด-lpr-ของ-frigate-แล้วเขียนท่อภาษาไทยเอง">ADR-002 — ปิด LPR ของ Frigate แล้วเขียนท่อภาษาไทยเอง</a></li>
+      <li><a href="#adr-003-ปิด-face-recognition-ของ-frigate-แล้วทำเอง">ADR-003 — ปิด face recognition ของ Frigate แล้วทำเอง</a></li>
+      <li><a href="#adr-004-วิเคราะห์เฉพาะจุดคอขวด-ไม่สแกนทุกกล้อง">ADR-004 — วิเคราะห์เฉพาะจุดคอขวด ไม่สแกนทุกกล้อง</a></li>
+      <li><a href="#adr-005-nvr-เป็นตัวบันทึกหลัก-ระบบเราเป็นดัชนีเสริม">ADR-005 — NVR เป็นตัวบันทึกหลัก ระบบเราเป็นดัชนีเสริม</a></li>
+      <li><a href="#adr-006-บังคับซิงก์เวลา-ntp-ทั้งไซต์">ADR-006 — บังคับซิงก์เวลา NTP ทั้งไซต์</a></li>
+      <li><a href="#adr-007-postgresql-pgvector-แทน-vector-database-เฉพาะทาง">ADR-007 — PostgreSQL + pgvector แทน vector database เฉพาะทาง</a></li>
+      <li><a href="#adr-008-ทำป้ายทะเบียนก่อนใบหน้า">ADR-008 — ทำป้ายทะเบียนก่อนใบหน้า</a></li>
+      <li><a href="#adr-009-วางกล้อง-lpr-จับท้ายรถ-ไม่ใช่หน้ารถ">ADR-009 — วางกล้อง LPR จับท้ายรถ ไม่ใช่หน้ารถ</a></li>
+      <li><a href="#adr-010-เลือก-1080p-แทน-4k-สำหรับกล้อง-lpr">ADR-010 — เลือก 1080p แทน 4K สำหรับกล้อง LPR</a></li>
+      <li><a href="#adr-011-เครื่องประมวลผลใช้-micro-tiny-มือสองแทน-n100-ใหม่">ADR-011 — เครื่องประมวลผลใช้ Micro/Tiny มือสองแทน N100 ใหม่</a></li>
+      <li><a href="#adr-012-ตัดหน้าร้านออกจากขอบเขตโครงการ-เหลือ-3-โกดัง">ADR-012 — ตัดหน้าร้านออกจากขอบเขตโครงการ (เหลือ 3 โกดัง)</a></li>
+      <li><a href="#adr-013-เลือกโกดังนำร่องจากไซต์-ip-camera-ล้วน">ADR-013 — เลือกโกดังนำร่องจากไซต์ IP camera ล้วน</a></li>
+      <li><a href="#adr-014-ใช้-tailscale-เข้าถึงระบบทีละไซต์-แทนระบบรวมศูนย์">ADR-014 — ใช้ Tailscale เข้าถึงระบบทีละไซต์ แทนระบบรวมศูนย์</a></li>
+      <li><a href="#adr-015-ยืนยันทิศทางกล้อง-lpr-หันออกนอก-จุดติดตั้งบนเสาโครงสร้างประตู">ADR-015 — ยืนยันทิศทางกล้อง LPR หันออกนอก + จุดติดตั้งบนเสาโครงสร้างประตู</a></li>
+      <li><a href="#adr-016-วางแผนกล้อง-lpr-อาจต้องใช้-2-ตัวตามพฤติกรรมจราจรจริง">ADR-016 — วางแผนกล้อง LPR อาจต้องใช้ 2 ตัวตามพฤติกรรมจราจรจริง</a></li>
+      <li><a href="#adr-017-ใช้-face-recognition-แบบ-opt-in-เท่านั้น-ปิดประเด็นฐานกฎหมาย">ADR-017 — ใช้ face recognition แบบ opt-in เท่านั้น (ปิดประเด็นฐานกฎหมาย)</a></li>
+      <li><a href="#adr-018-เลือกโมเดลใบหน้า-yunet-sface-แทน-buffalo_l">ADR-018 — เลือกโมเดลใบหน้า YuNet + SFace แทน buffalo_l</a></li>
+      <li><a href="#adr-019-พารามิเตอร์ปฏิบัติการของไซต์นำร่อง-retention-tier-b-ups">ADR-019 — พารามิเตอร์ปฏิบัติการของไซต์นำร่อง (retention, Tier B, UPS)</a></li>
+      <li><a href="#adr-020-ใช้กล้องแบรนด์-dahua-เท่านั้น-ไม่ใช้กล้องจีนทั่วไป">ADR-020 — ใช้กล้องแบรนด์ Dahua เท่านั้น ไม่ใช้กล้องจีนทั่วไป</a></li>
+      <li><a href="#สิ่งที่ยังไม่ตัดสินใจ">★ สิ่งที่ยังไม่ตัดสินใจ</a></li>
+      <li><a href="#บันทึกปัญหาจากหน้างาน">บันทึกปัญหาจากหน้างาน</a></li>
+    </ol>
+  </nav>
+  <main class="main">
+<hr />
+<h2 id="adr-001-ต่อยอด-frigate-แทนเขียน-pipeline-วิดีโอเอง">ADR-001 — ต่อยอด Frigate แทนเขียน pipeline วิดีโอเอง</h2>
+<p><strong>วันที่:</strong> 2026-08-03 · <strong>สถานะ:</strong> ตัดสินใจแล้ว</p>
+<p><strong>บริบท:</strong> ต้องดึง RTSP จากกล้องหลายตัว decode ตรวจจับวัตถุ และบันทึกวิดีโอ</p>
+<p><strong>ทางเลือกที่พิจารณา</strong></p>
+<ol>
+<li>เขียนเองทั้งหมดด้วย FFmpeg + OpenCV + YOLO</li>
+<li><strong>ต่อยอด Frigate + go2rtc</strong> ← เลือก</li>
+<li>ใช้ go2rtc อย่างเดียวแล้วเขียน pipeline เอง</li>
+</ol>
+<p><strong>เหตุผล:</strong> ปัญหาที่กินเวลาจริงในระบบ RTSP คือ reconnect เมื่อกล้องหลุด, codec ที่กล้องจีนส่งมาไม่ตรงมาตรฐาน, timestamp drift, และการจัดการ retention — Frigate แก้ปัญหาเหล่านี้มาแล้วและมีคนใช้งานจริงจำนวนมาก การเขียนเองจะใช้เวลาหลายเดือนไปกับปัญหาที่ไม่ได้สร้างคุณค่าให้ผู้ใช้</p>
+<p><strong>ผลที่ตามมา:</strong> ต้องยอมรับข้อจำกัดของ Frigate และสื่อสารกับระบบผ่าน MQTT + HTTP API เท่านั้น ไม่แตะโค้ดภายใน</p>
+<hr />
+<h2 id="adr-002-ปิด-lpr-ของ-frigate-แล้วเขียนท่อภาษาไทยเอง">ADR-002 — ปิด LPR ของ Frigate แล้วเขียนท่อภาษาไทยเอง</h2>
+<p><strong>วันที่:</strong> 2026-08-03 · <strong>สถานะ:</strong> ตัดสินใจแล้ว</p>
+<p><strong>บริบท:</strong> Frigate 0.17 มี LPR ในตัวแล้ว</p>
+<p><strong>เหตุผล:</strong> LPR ของ Frigate ใช้ PaddleOCR รุ่นที่รองรับ <strong>Latin และ Chinese เท่านั้น</strong> อ่านอักษรไทยไม่ได้ และไม่มีทางตั้งค่าให้อ่านได้ ต้องเขียนเอง</p>
+<p><strong>ผลที่ตามมา:</strong> เป็นงานเขียนเองที่หนักที่สุดในโปรเจกต์ ดู <a href="05-thai-lpr.html"><code>05-thai-lpr.md</code></a></p>
+<hr />
+<h2 id="adr-003-ปิด-face-recognition-ของ-frigate-แล้วทำเอง">ADR-003 — ปิด face recognition ของ Frigate แล้วทำเอง</h2>
+<p><strong>วันที่:</strong> 2026-08-03 · <strong>สถานะ:</strong> ตัดสินใจแล้ว</p>
+<p><strong>เหตุผล:</strong> face recognition ของ Frigate ให้ผลเป็น <code>sub_label</code> (ชื่อคน) แต่ <strong>ไม่ให้ embedding ออกมา</strong> ซึ่งเราต้องใช้ embedding เพื่อ:</p>
+<ul>
+<li>ค้นย้อนหลังด้วยรูปภาพ (&quot;อัปโหลดรูปนี้ แล้วหาว่าเคยมาวันไหน&quot;)</li>
+<li>จัดกลุ่มใบหน้าที่ไม่รู้จัก (บุคคลนิรนาม) โดยไม่ต้องระบุชื่อล่วงหน้า</li>
+</ul>
+<p>เมื่อจะทำ embedding เองอยู่แล้ว การเปิดของ Frigate ด้วยก็เป็นการเปลืองซีพียูซ้ำซ้อน</p>
+<hr />
+<h2 id="adr-004-วิเคราะห์เฉพาะจุดคอขวด-ไม่สแกนทุกกล้อง">ADR-004 — วิเคราะห์เฉพาะจุดคอขวด ไม่สแกนทุกกล้อง</h2>
+<p><strong>วันที่:</strong> 2026-08-04 · <strong>สถานะ:</strong> ตัดสินใจแล้ว · <strong>ผลกระทบสูงสุดในโปรเจกต์</strong></p>
+<p><strong>บริบท:</strong> แต่ละโกดังมีกล้องได้ถึง 32 ตัว</p>
+<p><strong>เหตุผล:</strong> ความแม่นยำของ LPR และใบหน้าถูกกำหนดโดย <strong>สภาพภาพ</strong> (มุม ระยะ แสง ความเร็ว) มากกว่าคุณภาพโมเดล การสแกน 32 กล้องที่มุมทั่วไปจะได้ผลปานกลางทุกตัว (70–85%) แต่การวิเคราะห์ 2–4 กล้องที่ออกแบบเฉพาะจะได้ ≥95% และ <strong>ทุกคน/ทุกคันที่เข้าโกดังต้องผ่านประตูอยู่แล้ว</strong></p>
+<p><strong>ผลที่ตามมา</strong></p>
+<ul>
+<li>ต้นทุนเครื่องลดจาก i7 32GB (~฿20,000) เหลือเครื่องระดับเริ่มต้น (~฿5,000–8,500 ดู <a href="02-hardware-sizing.html"><code>02-hardware-sizing.md</code></a>) ต่อไซต์</li>
+<li>มี compute เหลือให้ใช้โมเดลหนักขึ้น → คุณภาพขึ้นในขณะที่ต้นทุนลง</li>
+<li>ขอบเขต PDPA แคบลงมาก อธิบายความได้สัดส่วนได้ง่ายกว่า</li>
+<li><strong>เพิ่ม dependency ใหม่: งานติดตั้งหน้างาน</strong> (กล้อง ไฟ ลูกระนาด) ซึ่งไม่ใช่งานซอฟต์แวร์</li>
+<li><strong>ยอมรับข้อจำกัด:</strong> ระบบรู้แค่ &quot;เข้า–ออกเมื่อไร&quot; ไม่รู้ว่าไปไหนต่อในโกดัง</li>
+</ul>
+<hr />
+<h2 id="adr-005-nvr-เป็นตัวบันทึกหลัก-ระบบเราเป็นดัชนีเสริม">ADR-005 — NVR เป็นตัวบันทึกหลัก ระบบเราเป็นดัชนีเสริม</h2>
+<p><strong>วันที่:</strong> 2026-08-04 · <strong>สถานะ:</strong> ตัดสินใจแล้ว</p>
+<p><strong>เหตุผล:</strong> โกดังมี NVR ที่บันทึกวิดีโออยู่แล้วและใช้งานได้ดี ปัญหาที่แท้จริงคือ <strong>ค้นหาไม่ได้</strong> ไม่ใช่บันทึกไม่ได้ การสร้างระบบบันทึกซ้ำเป็นการลงทุนที่ไม่จำเป็นและเพิ่มความเสี่ยง</p>
+<p><strong>ผลที่ตามมา</strong></p>
+<ul>
+<li>ระบบเราเก็บเฉพาะ snapshot, crop, embedding และคลิปสั้นเฉพาะเหตุการณ์ที่ประตู</li>
+<li>พื้นที่จัดเก็บลดจากระดับ TB เหลือระดับร้อย GB</li>
+<li><strong>เกิดข้อบังคับใหม่: เวลาต้องตรงกับ NVR &lt; 2 วินาที</strong> ไม่งั้นผลการค้นหาไร้ประโยชน์ (ดู ADR-006)</li>
+</ul>
+<hr />
+<h2 id="adr-006-บังคับซิงก์เวลา-ntp-ทั้งไซต์">ADR-006 — บังคับซิงก์เวลา NTP ทั้งไซต์</h2>
+<p><strong>วันที่:</strong> 2026-08-04 · <strong>สถานะ:</strong> ตัดสินใจแล้ว</p>
+<p><strong>เหตุผล:</strong> ผลจาก ADR-005 — เมื่อผลลัพธ์ของเราคือ &quot;ไปเปิดดูที่ NVR เวลานี้&quot; ความถูกต้องของเวลาจึงเป็นเงื่อนไขที่ทำให้ระบบมีค่าหรือไม่มีค่าเลย เพี้ยน 30 วินาทีก็ใช้ไม่ได้</p>
+<p><strong>ผลที่ตามมา:</strong> เพิ่มฟิลด์ <code>clock_offset_ms</code> ต่อกล้อง, สคริปต์ <code>check_time_sync.py</code>, และทำให้เป็นข้อตรวจรับงานทุกไซต์</p>
+<hr />
+<h2 id="adr-007-postgresql-pgvector-แทน-vector-database-เฉพาะทาง">ADR-007 — PostgreSQL + pgvector แทน vector database เฉพาะทาง</h2>
+<p><strong>วันที่:</strong> 2026-08-03 · <strong>สถานะ:</strong> ตัดสินใจแล้ว</p>
+<p><strong>ทางเลือกที่พิจารณา:</strong> pgvector · Qdrant · Milvus</p>
+<p><strong>เหตุผล:</strong> เมื่อวิเคราะห์เฉพาะจุดคอขวด ปริมาณ vector ต่อไซต์อยู่ระดับ <strong>แสนถึงล้านต้น ๆ ต่อปี</strong> ซึ่ง pgvector รับได้สบาย ข้อดีที่ชี้ขาดคือ <strong>metadata กับ vector อยู่ฐานเดียวกัน JOIN ได้ตรง ๆ</strong> และมี service ให้ดูแลน้อยลงหนึ่งตัว ซึ่งสำคัญมากเมื่อต้องติดตั้งหลายไซต์ที่ไม่มีคน IT ประจำ</p>
+<p><strong>ผลที่ตามมา:</strong> ยังคง repository interface ไว้เผื่อต้องย้ายไป Qdrant (ต้นทุนต่ำ) แต่โอกาสได้ใช้แทบเป็นศูนย์</p>
+<hr />
+<h2 id="adr-008-ทำป้ายทะเบียนก่อนใบหน้า">ADR-008 — ทำป้ายทะเบียนก่อนใบหน้า</h2>
+<p><strong>วันที่:</strong> 2026-08-04 · <strong>สถานะ:</strong> ตัดสินใจแล้ว</p>
+<p><strong>เหตุผล:</strong></p>
+<ol>
+<li>ป้ายทะเบียนให้คุณค่าในการค้นหาสูงกว่า (เป็นตัวระบุที่แม่นยำและผู้ใช้จำได้)</li>
+<li><strong>ภาระตามกฎหมายน้อยกว่ามาก</strong> — ใบหน้าเป็นข้อมูลชีวมิติซึ่งเป็นข้อมูลอ่อนไหวตาม พ.ร.บ.คุ้มครองข้อมูลส่วนบุคคล ม.26</li>
+<li>ควรพิสูจน์คุณค่าของระบบด้วยส่วนที่ความเสี่ยงต่ำกว่าก่อน</li>
+</ol>
+<hr />
+<h2 id="adr-009-วางกล้อง-lpr-จับท้ายรถ-ไม่ใช่หน้ารถ">ADR-009 — วางกล้อง LPR จับท้ายรถ ไม่ใช่หน้ารถ</h2>
+<p><strong>วันที่:</strong> 2026-08-04 · <strong>สถานะ:</strong> ตัดสินใจแล้ว</p>
+<p><strong>เหตุผล:</strong> <strong>รถจักรยานยนต์ในไทยมีป้ายทะเบียนเฉพาะด้านหลัง</strong> กล้องที่หันรับรถวิ่งเข้าหาจะจับมอเตอร์ไซค์ไม่ได้เลย ซึ่งเป็นยานพาหนะส่วนใหญ่ในโกดังไทย</p>
+<p><strong>ผลที่ตามมา:</strong> ต้องออกแบบตำแหน่งกล้องให้จับท้ายรถขณะวิ่งผ่าน ดู <a href="10-chokepoint-design.html"><code>10-chokepoint-design.md</code></a> หัวข้อ 3.1</p>
+<hr />
+<h2 id="adr-010-เลือก-1080p-แทน-4k-สำหรับกล้อง-lpr">ADR-010 — เลือก 1080p แทน 4K สำหรับกล้อง LPR</h2>
+<p><strong>วันที่:</strong> 2026-08-04 · <strong>สถานะ:</strong> ตัดสินใจแล้ว</p>
+<p><strong>เหตุผล:</strong> เซนเซอร์ 4K มีพิกเซลเล็กกว่า → รับแสงได้น้อยกว่าต่อพิกเซล เมื่อบังคับ shutter เร็ว 1/500s (ซึ่งจำเป็นเพื่อไม่ให้ป้ายเบลอ) ภาพกลางคืนจะมี noise สูงจนอ่านไม่ออก <strong>กล้อง 1080p เซนเซอร์ 1/1.8&quot; เลนส์สว่าง ดีกว่ากล้อง 4K เซนเซอร์ 1/3&quot; ราคาเท่ากัน</strong></p>
+<hr />
+<h2 id="adr-011-เครื่องประมวลผลใช้-micro-tiny-มือสองแทน-n100-ใหม่">ADR-011 — เครื่องประมวลผลใช้ Micro/Tiny มือสองแทน N100 ใหม่</h2>
+<p><strong>วันที่:</strong> 2026-08-08 · <strong>สถานะ:</strong> ตัดสินใจแล้ว</p>
+<p><strong>บริบท:</strong> ราคา N100 กล่องจีนใหม่ในตลาดไทยจริงอยู่ที่ ~฿7,800–8,990 สูงกว่าที่ประเมินไว้เดิม (฿7,000–10,000 ยังพอใกล้เคียง แต่ N100 ไม่ใช่ตัวเลือกที่ถูกที่สุดที่ผ่านเกณฑ์)</p>
+<p><strong>เหตุผล:</strong> เครื่องธุรกิจมือสองฟอร์มแฟกเตอร์ Micro/Tiny/Mini ที่ใช้ซีพียูรุ่นลงท้าย T (เช่น i5-8500T, 35W TDP) ผ่านเกณฑ์ขั้นต่ำทุกข้อ (AVX2, iGPU Gen6+, decode ผ่าน QuickSync) เหมือนกัน แต่ราคาต่ำกว่า N100 ใหม่มาก (~฿5,000–6,500 เทียบ ~฿7,800–8,990) และ idle power ต่างกันไม่ถึง 10W ซึ่งคิดเป็นค่าไฟไม่ถึง ฿1,000 ตลอด 3 ปี — ไม่คุ้มกับส่วนต่างราคาที่เอาไปลงกล้อง LPR ได้มากกว่า (ดู <a href="02-hardware-sizing.html"><code>02-hardware-sizing.md</code></a> หัวข้อ 1)</p>
+<p><strong>ผลที่ตามมา</strong></p>
+<ul>
+<li>N100/N305 ยังเป็นตัวเลือกที่ถูกต้อง สำหรับผู้ที่ไม่อยากยุ่งกับของมือสอง</li>
+<li>เพิ่มความเสี่ยงใหม่: <strong>ซีพียูมือสองราคาถูกบางรุ่นไม่มี AVX2</strong> (Gemini Lake, Jasper Lake) ต้องตรวจรุ่นให้ชัดก่อนซื้อทุกครั้ง — ดูตารางห้ามซื้อใน <code>02-hardware-sizing.md</code> หัวข้อ 1.3</li>
+<li>runbook เปิดไซต์ใหม่ต้องรวมขั้นตอนตรวจสอบสเปกเครื่องมือสองก่อนซื้อ</li>
+</ul>
+<hr />
+<h2 id="adr-012-ตัดหน้าร้านออกจากขอบเขตโครงการ-เหลือ-3-โกดัง">ADR-012 — ตัดหน้าร้านออกจากขอบเขตโครงการ (เหลือ 3 โกดัง)</h2>
+<p><strong>วันที่:</strong> 2026-08-09 · <strong>สถานะ:</strong> ตัดสินใจแล้ว</p>
+<p><strong>บริบท:</strong> บริษัทมีพื้นที่ทั้งหมด 4 แห่ง — 3 โกดังที่มีจุดเข้า-ออกจุดเดียว และ 1 หน้าร้านกว้าง ~2 คูหา ที่รถวิ่งผ่านตลอดวันทั้งลูกค้าและไม่ใช่ลูกค้า</p>
+<p><strong>เหตุผล:</strong> หน้าร้านมีความถี่ของปัญหา (เช่น ลูกค้าแจ้งของขาด) ต่ำ และเมื่อเกิดปัญหาจริงยังใช้วิธีค้นจาก NVR ได้ตามปกติ (ช้ากว่าระบบนี้พอสมควรแต่ยอมรับได้เพราะเกิดไม่บ่อย) การลงทุนระบบสำหรับพื้นที่กว้างขนาดนี้ที่รถวิ่งผ่านหนาแน่นตลอดวัน ไม่ใช่แค่จุดเดียวแบบโกดัง ยังไม่คุ้มกับประโยชน์ที่เห็นในตอนนี้</p>
+<p><strong>ผลที่ตามมา</strong></p>
+<ul>
+<li>ขอบเขตโครงการเหลือ <strong>3 โกดัง</strong> ไม่ใช่ 4</li>
+<li>หน้าร้านอาจพิจารณาใหม่ในอนาคตถ้าเห็นประโยชน์ชัดเจนขึ้น — แต่ต้องออกแบบต่างจากรูปแบบจุดคอขวดที่ใช้กับโกดัง เพราะพื้นที่กว้างกว่าประตูเดียวมาก ไม่ใช่แค่ขยายจำนวนกล้อง</li>
+</ul>
+<hr />
+<h2 id="adr-013-เลือกโกดังนำร่องจากไซต์-ip-camera-ล้วน">ADR-013 — เลือกโกดังนำร่องจากไซต์ IP camera ล้วน</h2>
+<p><strong>วันที่:</strong> 2026-08-09 · <strong>สถานะ:</strong> ตัดสินใจแล้ว</p>
+<p><strong>บริบท:</strong> ใน 3 โกดังที่อยู่ในขอบเขตโครงการ (หลัง ADR-012) — 2 แห่งยังใช้ XVR ของ Dahua อยู่ อีก 1 แห่งเป็น IP camera ล้วน</p>
+<p><strong>เหตุผล:</strong> โกดังนำร่องควรมีตัวแปรน้อยที่สุดเท่าที่ทำได้ เพื่อแยกปัญหาของระบบใหม่ออกจากปัญหาของโครงสร้างพื้นฐานเดิม ไซต์ XVR มีความไม่แน่นอนเพิ่มเติมที่ยังไม่เคยทดสอบ (การซิงก์เวลากับ XVR, การ map ช่องของกล้องที่อาจต่างจาก NVR ปกติ) ซึ่งควรแก้ทีหลังตอนมีประสบการณ์จากไซต์แรกแล้ว</p>
+<p><strong>ผลที่ตามมา</strong></p>
+<ul>
+<li>โกดังนำร่อง = ไซต์ที่เป็น IP camera ล้วน (ตัวเลือกเดียวที่เหลือหลังตัดหน้าร้านออก)</li>
+<li>2 ไซต์ XVR รอคิวไว้ก่อน — <strong>ยังไม่ปิดว่าต้องรอเปลี่ยนเป็น NVR เสมอไป</strong> Dahua XVR บางรุ่นเปิด RTSP ต่อช่องได้เหมือน NVR อยู่แล้ว ต้องทดสอบจริงตอนถึงคิว ไม่ใช่ด่วนสรุปว่าใช้ไม่ได้</li>
+<li>ต้องเพิ่มขั้นตอนทดสอบเฉพาะ XVR ใน <a href="03-camera-onboarding.html"><code>03-camera-onboarding.md</code></a> ก่อนขยายไปสองไซต์นี้ (ยังไม่ทำตอนนี้)</li>
+</ul>
+<hr />
+<h2 id="adr-014-ใช้-tailscale-เข้าถึงระบบทีละไซต์-แทนระบบรวมศูนย์">ADR-014 — ใช้ Tailscale เข้าถึงระบบทีละไซต์ แทนระบบรวมศูนย์</h2>
+<p><strong>วันที่:</strong> 2026-08-09 · <strong>สถานะ:</strong> ตัดสินใจแล้ว</p>
+<p><strong>บริบท:</strong> มี 3 ไซต์ในขอบเขตโครงการ ยังไม่ถึงจุดที่ต้องค้นข้ามไซต์บ่อยพอจะคุ้มกับการลงทุนระบบรวมศูนย์</p>
+<p><strong>เหตุผล:</strong> Tailscale ให้เข้าถึงหน้าเว็บค้นหาของแต่ละไซต์จากระยะไกลได้โดยไม่ต้องเปิดพอร์ตออกอินเทอร์เน็ต ตรงกับเงื่อนไข &quot;ถ้าจำเป็นต้องเข้าจากภายนอก ให้ใช้ VPN เท่านั้น&quot; ที่กำหนดไว้ใน <a href="06-pdpa-compliance.html"><code>06-pdpa-compliance.md</code></a> อยู่แล้ว ค่าใช้จ่ายและความซับซ้อนต่ำกว่าระบบรวมศูนย์มาก และไม่ปิดทางทำระบบรวมศูนย์ในอนาคต</p>
+<p><strong>ผลที่ตามมา</strong></p>
+<ul>
+<li><strong><span class="star">★</span> ก่อนเปิดใช้งานจริง ต้องทำ 2 อย่างก่อน</strong> ซึ่งยังไม่มีทั้งคู่ (ยังไม่เขียนโค้ด): (1) เปิด built-in authentication ของ Frigate ไม่งั้นใครอยู่ใน tailnet เดียวกันก็เห็นภาพสด/คลิปได้หมด (2) มีระบบ login/RBAC ในชั้นแอป (<code>web</code>/<code>api</code>) เพราะ Tailscale ควบคุมแค่ว่า &quot;เข้าเครือข่ายได้ไหม&quot; ไม่ใช่ &quot;มีสิทธิ์ดูข้อมูลอะไร&quot;</li>
+<li>ติดตั้งแบบไม่เปิด subnet routing เพื่อไม่ให้เห็นกล้อง/NVR ในวง LAN เดียวกันเกินขอบเขตที่ตั้งใจ</li>
+<li>ถ้าไซต์ไหนไม่มีอินเทอร์เน็ตเลย จะใช้วิธีนี้ไม่ได้</li>
+<li>รายการ &quot;ระบบรวมศูนย์&quot; ที่เคยค้างไว้ ปิดเป็น <strong>&quot;ยังไม่ทำตอนนี้&quot;</strong> — จะพิจารณาใหม่ก็ต่อเมื่อธุรกิจขยายจนคุ้มลงทุน</li>
+</ul>
+<hr />
+<h2 id="adr-015-ยืนยันทิศทางกล้อง-lpr-หันออกนอก-จุดติดตั้งบนเสาโครงสร้างประตู">ADR-015 — ยืนยันทิศทางกล้อง LPR หันออกนอก + จุดติดตั้งบนเสาโครงสร้างประตู</h2>
+<p><strong>วันที่:</strong> 2026-08-09 · <strong>สถานะ:</strong> ตัดสินใจแล้ว</p>
+<p><strong>บริบท:</strong> จากภาพถ่ายหน้างานจริงของไซต์นำร่อง — &quot;Entrance_1&quot;/&quot;Entrance_2&quot; คือกล้องมุมกว้างที่มีอยู่แล้ว 2 ตัวถ่ายประตูเดียวกันจากมุมซ้ายและขวา ไม่ใช่คนละประตู ผู้ใช้ยืนยันให้กล้อง LPR หันออกนอกตามแผนเดิม (เห็นป้ายรถยนต์ด้านหน้า ไม่เห็นป้ายมอเตอร์ไซค์ตอนเข้า)</p>
+<p><strong>เหตุผล:</strong> เสาโครงสร้างสีแดงที่รับรางประตูบานเลื่อนอยู่ที่แนวประตูพอดี เป็นจุดติดตั้งที่ยึดกับอาคารจริง ไม่ใช่เสาลอยกลางแจ้ง แก้ปัญหาความเสี่ยงด้านความเสียหายที่กังวลไว้ได้โดยไม่ต้องขอเสาไฟฟ้า และไม่กระทบ logic ตรวจทิศทางเข้า/ออกของระบบ (อ้างอิงจากลำดับโซนที่ตัดผ่าน ไม่ใช่จากทิศทางกล้อง)</p>
+<p>พบเพิ่มว่าประตูเดียวใช้ทั้งเข้าและออก — กล้องหันออกจะเห็น &quot;หน้ารถ&quot; ตอนเข้า และ &quot;ท้ายรถ&quot; ตอนออก มอเตอร์ไซค์ที่ไม่มีป้ายหน้าจึงยังถูกจับป้ายได้ตอนขาออก ไม่ได้พลาดทั้งหมดตามที่ ADR-009 กังวลไว้ในกรณีทั่วไป</p>
+<p><strong>ผลที่ตามมา</strong></p>
+<ul>
+<li>ติดตั้งกล้อง LPR บนเสาแดงที่แนวประตู สูง 1.0–1.5 ม. (คนละจุดกับกล้องมุมกว้างเดิมที่ติดสูงใกล้จั่วหลังคา)</li>
+<li><strong><span class="star">★</span> ต้องทดสอบ backlight เป็นพิเศษ</strong> — กล้องหันเข้าหาแสงกลางแจ้งขณะรถเป็นเงามืดในโกดัง เปิด WDR เต็มที่และทดสอบช่วงเที่ยงวันที่แสงจ้าที่สุดด้วย เพิ่มจากเช็กลิสต์เดิมที่ทดสอบแค่ 7:00/17:00</li>
+<li>ADR-009 ยังใช้ได้ในกรณีทั่วไป (ไซต์ที่มีพื้นที่ถอยร่นพอ) — ไซต์นี้เป็นข้อยกเว้นที่มีทางแก้เฉพาะจากโครงสร้างอาคารที่มีอยู่ ไซต์อื่นต้องประเมินใหม่ตามหน้างานจริง</li>
+</ul>
+<hr />
+<h2 id="adr-016-วางแผนกล้อง-lpr-อาจต้องใช้-2-ตัวตามพฤติกรรมจราจรจริง">ADR-016 — วางแผนกล้อง LPR อาจต้องใช้ 2 ตัวตามพฤติกรรมจราจรจริง</h2>
+<p><strong>วันที่:</strong> 2026-08-09 · <strong>สถานะ:</strong> ตัดสินใจบางส่วน — รอวัดหน้างานยืนยัน</p>
+<p><strong>บริบท:</strong> ประตูกว้างพอรับรถสิบล้อ/รถพ่วง จากการสังเกตจริง รถใหญ่ (สิบล้อ, รถพ่วง) เข้าทางขวาของภาพเพื่อถอยเข้าโซนจอดเฉพาะ ส่วนรถเล็ก (กระบะ, สี่ล้อ, หกล้อ) เข้าทางซ้ายกึ่งกลาง</p>
+<p><strong>เหตุผล:</strong> รถสองกลุ่มใช้เส้นทางต่างกันจริงภายในประตูเดียวกัน กล้องตัวเดียวที่ FOV แคบพอให้ตัวอักษรบนป้าย ≥25px (สูตรในหัวข้อ 3.3 ของ <a href="10-chokepoint-design.html"><code>10-chokepoint-design.md</code></a>) อาจครอบคลุมไม่ถึงทั้งสองเส้นทางพร้อมกัน — รถใหญ่ที่ถอยเข้าช้า ๆ เป็นโอกาสจับภาพที่ดีเพราะแทบไม่เคลื่อนที่ ถ้าใช้กล้องแยกเฉพาะเลนนั้นน่าจะได้ความแม่นสูงมาก</p>
+<p><strong>ผลที่ตามมา</strong></p>
+<ul>
+<li>เผื่องบกล้อง LPR ตัวที่ 2 ไว้ในแผนจัดซื้อ (~฿4,000–8,000 เพิ่มเติม) แต่ยังไม่ฟันธงจนกว่าจะวัดระยะจริงหน้างานว่ากล้องเดียวครอบคลุมทั้งสองเลนได้ไหม</li>
+<li>ปิดรายการค้างเดิมเรื่อง &quot;1 หรือ 2 ตัว&quot; บางส่วน — จากเดิมขึ้นกับ &quot;เลนเข้า-ออกแยกกันไหม&quot; เปลี่ยนเป็น &quot;เลนรถใหญ่-รถเล็กแยกกันไหม&quot; ซึ่งตอนนี้รู้แล้วว่าแยกจริง เหลือแค่วัดระยะเพื่อยืนยันจำนวนกล้อง</li>
+</ul>
+<hr />
+<h2 id="adr-017-ใช้-face-recognition-แบบ-opt-in-เท่านั้น-ปิดประเด็นฐานกฎหมาย">ADR-017 — ใช้ face recognition แบบ opt-in เท่านั้น (ปิดประเด็นฐานกฎหมาย)</h2>
+<p><strong>วันที่:</strong> 2026-08-09 · <strong>สถานะ:</strong> ตัดสินใจแล้ว</p>
+<p><strong>บริบท:</strong> คนเข้าพื้นที่ ~80% เป็นพนักงาน/ทีมงานเอง ~20% เป็นลูกค้า/บุคคลภายนอกที่เข้าไม่บ่อย — เข้าไม่บ่อยพอที่จะขอความยินยอมตรง ๆ ต่อหน้าได้จริงในทางปฏิบัติ (ต่างจากร้านหน้าถนนที่คนเดินผ่านตลอดเวลาซึ่งถูกตัดออกจากขอบเขตโครงการไปแล้วใน ADR-012)</p>
+<p><strong>ทางเลือกที่พิจารณา</strong></p>
+<ol>
+<li>เก็บ embedding ของทุกคนที่ตรวจพบไว้ก่อน ใครไม่ยินยอมค่อยลบทีหลัง — <strong>ปฏิเสธ</strong> เพราะสลับด้านกับข้อกำหนด ม.26 ที่ต้องขอยินยอมก่อนเก็บ ไม่ใช่หลังเก็บ และในทางปฏิบัติระบบไม่มีทางรู้เองว่า embedding ไหนเป็นของคนที่ไม่ยินยอม ทำให้ &quot;ลบทีหลัง&quot; แทบเป็นไปไม่ได้จริง</li>
+<li><strong>สร้าง face embedding เฉพาะคนที่อยู่ในรายชื่อที่ยินยอมแล้วเท่านั้น (opt-in watchlist)</strong> ← เลือก</li>
+</ol>
+<p><strong>เหตุผล:</strong> พนักงานเซ็นรับทราบตอนเข้างานได้ง่าย บุคคลภายนอกที่มาไม่บ่อยขอความยินยอมตรงหน้าได้จริงในทางปฏิบัติ</p>
+<p><strong>ผลที่ตามมา</strong></p>
+<ul>
+<li>วิดีโอยังบันทึกปกติสำหรับทุกคน (เหมือนกล้องวงจรปิดทั่วไป) — แค่ <strong>ไม่แปลงเป็น face embedding ที่ค้นหาได้</strong> สำหรับคนที่ไม่อยู่ในรายชื่อยินยอม</li>
+<li>ยกเลิกแผนเดิมเรื่อง &quot;จัดกลุ่มใบหน้าคนแปลกหน้าอัตโนมัติ&quot; แบบทำกับทุกคนที่ตรวจพบ — เปลี่ยนเป็นจับคู่กับรายชื่อที่ยินยอมแล้วเท่านั้น</li>
+<li>ต้องมีขั้นตอนเก็บความยินยอม 2 แบบ: เอกสารพนักงาน (เข้างาน) และแบบฟอร์มสั้น ๆ สำหรับบุคคลภายนอกที่มาเป็นครั้งแรก</li>
+<li>ป้าย PDPA ที่ทางเข้าต้องเพิ่มข้อความระบุการประมวลผลข้อมูลชีวมิติเมื่อเริ่มใช้ฟีเจอร์นี้จริง (ไม่ใช่แค่ &quot;บันทึกภาพ&quot; เฉย ๆ) — ร่างป้ายปัจจุบันใน <code>06-pdpa-compliance.md</code> ยังเป็นเวอร์ชันที่ไม่มีใบหน้า ต้องอัปเดตก่อนเปิดใช้เฟส 4</li>
+</ul>
+<hr />
+<h2 id="adr-018-เลือกโมเดลใบหน้า-yunet-sface-แทน-buffalo_l">ADR-018 — เลือกโมเดลใบหน้า YuNet + SFace แทน buffalo_l</h2>
+<p><strong>วันที่:</strong> 2026-08-09 · <strong>สถานะ:</strong> ตัดสินใจแล้ว</p>
+<p><strong>บริบท:</strong> ยืนยันว่ายังต้องการฟีเจอร์ค้นหาด้วยใบหน้า แม้คาดว่าจะใช้ไม่บ่อย</p>
+<p><strong>เหตุผล:</strong> <code>buffalo_l</code> (ArcFace) โค้ดเป็น MIT แต่ตัวโมเดลอนุญาตเฉพาะงานวิจัยไม่เชิงพาณิชย์ ต้องขอไลเซนส์แยกจาก InsightFace หากใช้เชิงพาณิชย์ — <strong><code>YuNet</code> (ตรวจจับ) + <code>SFace</code> (embedding) จาก OpenCV Zoo เป็น Apache-2.0</strong> ใช้เชิงพาณิชย์ได้ทันทีโดยไม่ต้องขอใคร</p>
+<p>ส่วน <code>YOLOv8</code> (ตรวจป้ายทะเบียน) เป็น AGPL-3.0 — ผู้ใช้ยืนยันว่าเปิดซอร์สโค้ดของระบบได้ไม่มีปัญหา (ระบบขนาดเล็ก ไม่ใช่ผลิตภัณฑ์แข่งขันเชิงพาณิชย์) จึงใช้ตามเงื่อนไข AGPL-3.0 ได้โดยไม่ต้องซื้อ Enterprise License</p>
+<p><strong>ผลที่ตามมา</strong></p>
+<ul>
+<li>ใช้ YuNet+SFace แทน buffalo_l ตั้งแต่เริ่มเขียน <code>services/common/analytics/face.py</code> ในเฟส 4</li>
+<li>ต้องเผยแพร่ซอร์สโค้ดของระบบต่อสาธารณะ (เช่น ขึ้น GitHub) เพื่อให้ตรงเงื่อนไข AGPL-3.0 ของ YOLOv8 — ไม่มีค่าใช้จ่าย</li>
+</ul>
+<hr />
+<h2 id="adr-019-พารามิเตอร์ปฏิบัติการของไซต์นำร่อง-retention-tier-b-ups">ADR-019 — พารามิเตอร์ปฏิบัติการของไซต์นำร่อง (retention, Tier B, UPS)</h2>
+<p><strong>วันที่:</strong> 2026-08-09 · <strong>สถานะ:</strong> ตัดสินใจแล้ว</p>
+<p><strong>บริบท:</strong> ไซต์นำร่องมี Dahua NVR + กล้อง IP ~10–16 ตัวทั่วโกดัง (ยังไม่มีกล้อง LPR สักตัว) รวม 2 กล้องมุมกว้างที่มีอยู่แล้วคุมประตูเดียวกันจากมุมซ้าย-ขวา พื้นเป็นคอนกรีตเท (ไม่ใช่ดิน) แต่ฝนตกทำให้เป็นแอ่งน้ำขังบางจุด และมี UPS ที่ใช้กับ NVR อยู่แล้ว</p>
+<p><strong>การตัดสินใจ</strong></p>
+<ul>
+<li><strong>Retention คลิปสั้น = 60 วัน</strong> (ปรับเพิ่มเป็น 90 วันได้ทีหลังเมื่อขยาย HDD โดยไม่ต้องแก้โค้ด) / <strong>snapshot-crop-metadata = 1 ปี</strong> เพราะกินพื้นที่น้อยมาก</li>
+<li><strong>กล้องมุมกว้างที่มีอยู่แล้ว (Tier B) ยังไม่เอาเข้าระบบดัชนี</strong> — ปล่อยเป็นกล้องเสริมนอกระบบไปก่อน รอผลใช้งานจริงจากจุดคอขวดก่อนตัดสินใจว่าคุ้มจะเชื่อมเข้าระบบไหม</li>
+<li><strong>แชร์ UPS เดิมของ NVR</strong> — สำรองไฟเกือบครึ่งชั่วโมง เพียงพอสำหรับ shutdown แบบมีระเบียบ</li>
+<li>ควบคุมความเร็วรถของพนักงานตัวเองด้วยนโยบายภายในได้ (ไม่ต้องพึ่งลูกระนาดอย่างเดียว) — แต่คนขับรถภายนอก (รถส่งของ ฯลฯ) ไม่อยู่ในการควบคุมนี้ ลูกระนาดจริงยังจำเป็นสำหรับกลุ่มนั้น</li>
+</ul>
+<p><strong>ผลที่ตามมา</strong></p>
+<ul>
+<li>ต้องตั้งให้ Micro-PC shutdown อัตโนมัติเมื่อแบต UPS ใกล้หมด (เช่นผ่าน NUT — Network UPS Tools) ไม่งั้น Postgres เสี่ยงข้อมูลเสียหายจากไฟดับกะทันหัน — เพิ่มเป็นงานตั้งค่าเฟส 2</li>
+<li>ยังไม่มีระบบ backup อัตโนมัติ (ไม่มีงบตอนนี้) — ยอมรับความเสี่ยงนี้ได้เพราะ NVR ยังเป็นแหล่งข้อมูลจริงเสมอ ถ้าดิสก์ระบบดัชนีพังคือ &quot;ต้องสร้างดัชนีใหม่&quot; ไม่ใช่ &quot;หลักฐานหาย&quot; — ทำ backup เพิ่มเมื่อมีงบ อาจทำพร้อมกับระบบ backup หลายไซต์ในอนาคต</li>
+</ul>
+<hr />
+<h2 id="adr-020-ใช้กล้องแบรนด์-dahua-เท่านั้น-ไม่ใช้กล้องจีนทั่วไป">ADR-020 — ใช้กล้องแบรนด์ Dahua เท่านั้น ไม่ใช้กล้องจีนทั่วไป</h2>
+<p><strong>วันที่:</strong> 2026-08-09 · <strong>สถานะ:</strong> ตัดสินใจแล้ว</p>
+<p><strong>บริบท:</strong> ระบบเดิมของบริษัทเคยมีกล้องจีนทั่วไปอยู่ แต่ถอดออกไปแล้วเพราะอัปเกรดเป็นกล้องแบรนด์ ปัจจุบันไซต์นำร่องเป็น Dahua ล้วนทั้ง NVR และกล้อง IP หลังอ่าน <code>03-camera-onboarding.md</code> หัวข้อกับดักกล้องจีน (ไม่มี substream, UDP หลุดง่าย, fps ไม่ตรงสเปก, ต้องเดา RTSP URL เอง ฯลฯ) เห็นตรงกับปัญหาที่เคยเจอมาก่อนจนต้องถอดออก</p>
+<p><strong>เหตุผล:</strong> ประสบการณ์จริงยืนยันสิ่งที่เอกสารเตือนไว้แล้ว — กล้องจีนทั่วไปเพิ่มความเสี่ยงทางเทคนิคที่ไม่จำเป็น ในเมื่อ 2 ใน 3 โกดังที่เหลือในขอบเขตโครงการ (หลัง ADR-012) ก็เป็น Dahua อยู่แล้วทั้งคู่ (ผ่าน XVR) การซื้อกล้องใหม่ (LPR/overview/face) เป็น Dahua ทั้งหมดจึงตัดความไม่แน่นอนเรื่อง ONVIF/URL pattern/session limit ที่เอกสารเตือนไว้ออกไปเกือบทั้งหมด</p>
+<p><strong>ผลที่ตามมา</strong></p>
+<ul>
+<li>ซื้อกล้องใหม่ทุกตัว (LPR, overview, face) เป็น <strong>Dahua เท่านั้น</strong> — ใช้ URL pattern เดียว (<code>rtsp://.../cam/realmonitor?channel=1&amp;subtype=0|1</code>) ทุกไซต์ ไม่ต้องเผื่อโค้ด ONVIF discovery สำหรับกล้องยี่ห้ออื่น</li>
+<li><strong>มีตัวเลือกเพิ่ม:</strong> Dahua มีกล้องซีรีส์ ANPR โดยเฉพาะ (<strong>ITC</strong> เช่น ITC413/ITC437) ที่ทำ shutter lock/WDR/vehicle capture ให้พร้อมในตัว ไม่ต้องตั้งเองตาม <code>10-chokepoint-design.md</code> หัวข้อ 3.6 — แต่ราคาน่าจะสูงกว่ากล้อง IPC ทั่วไปที่ตั้งค่าเองพอสมควร ต้องเทียบราคาจริงก่อนตัดสินใจ ยังไม่ยืนยันว่าคุ้มกว่ากล้อง IPC ธรรมดา + ตั้งชัตเตอร์เอง</li>
+<li><code>03-camera-onboarding.md</code> หัวข้อกล้องจีนทั่วไปยังเก็บไว้ในเอกสาร (เผื่ออนาคตมีไซต์ใหม่ที่ไม่ใช่ Dahua) แต่ไม่ใช่เส้นทางหลักของโปรเจกต์นี้อีกต่อไป</li>
+<li>2 ไซต์ XVR (ADR-013) มีโอกาสสูงขึ้นที่จะต่อได้ง่าย เพราะเป็น Dahua เหมือนกัน ไม่ใช่ยี่ห้ออื่นที่ไม่รู้พฤติกรรม</li>
+</ul>
+<hr />
+<h2 id="สิ่งที่ยังไม่ตัดสินใจ"><span class="star">★</span> สิ่งที่ยังไม่ตัดสินใจ</h2>
+<p>รายการค้างทั้งหมดปิดแล้ว เหลือแค่การยืนยันหน้างานจริงตามที่ระบุไว้ใน ADR-016 (จำนวนกล้อง LPR 1 หรือ 2 ตัว) ก่อนสั่งซื้อของรอบสุดท้าย</p>
+<hr />
+<h2 id="บันทึกปัญหาจากหน้างาน">บันทึกปัญหาจากหน้างาน</h2>
+<blockquote>
+<p>เมื่อเปิดไซต์ใหม่แต่ละครั้ง ให้บันทึกปัญหาที่เจอและวิธีแก้ไว้ที่นี่ เพื่อให้ไซต์ถัดไปเร็วขึ้น</p>
+</blockquote>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>วันที่</th>
+<th>ไซต์</th>
+<th>ปัญหา</th>
+<th>วิธีแก้</th>
+<th>ควรแก้ที่เอกสารไหน</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2026-08-09</td>
+<td>หน้าร้าน (ทดลองสคริปต์ก่อนลงจริง ไม่ใช่ไซต์ในขอบเขตโครงการ)</td>
+<td>กล้อง Dahua ชุดนี้ตั้ง sub stream = main stream (1920x1080 เท่ากันหมด) มาจากโรงงาน/ค่าเริ่มต้น มีแค่ 1 ใน 10 ตัวที่ตั้งแยกถูกต้องแล้ว</td>
+<td><span class="star">★</span> ต้องเข้าเว็บกล้องแต่ละตัว ตั้ง sub stream แยกเอง (เช่น 704x576) ห้ามเชื่อว่ากล้อง Dahua ตั้งมาถูกจากโรงงาน — เช็กทุกตัวตอนสำรวจไซต์นำร่องจริง <code>probe_cameras.py</code> เตือนเรื่องนี้อัตโนมัติแล้ว</td>
+<td><code>03-camera-onboarding.md</code>, <code>10-chokepoint-design.md</code></td>
+</tr>
+<tr>
+<td>2026-08-09</td>
+<td>หน้าร้าน (ทดลองสคริปต์)</td>
+<td><code>probe_cameras.py</code> crash ตอน print ตัวอักษร <span class="star">★</span> บนคอนโซล Windows บางตัว (cp874 encode ไม่ได้)</td>
+<td>บังคับ UTF-8 ให้ stdout/stderr ตั้งแต่ต้นสคริปต์ — แก้แล้วในโค้ด</td>
+<td>—</td>
+</tr>
+<tr>
+<td>2026-08-09</td>
+<td>หน้าร้าน (ทดลองสคริปต์)</td>
+<td>สแกน subnet รอบเดียวพลาดกล้องที่เปิดใช้งานจริง (เราท์เตอร์เล็กสำลักกับการยิง TCP พร้อมกันเยอะ 64 ตัวพร้อมกัน)</td>
+<td>เพิ่มสแกน 2 รอบใน <code>scan_subnet</code> — รอบสองยืนยันซ้ำเฉพาะไอพีที่ยังไม่พบ ด้วย timeout ยาวขึ้น 3 เท่าและ concurrency ต่ำลง — แก้แล้วในโค้ด</td>
+<td>—</td>
+</tr>
+<tr>
+<td>2026-08-09</td>
+<td>ตอน <code>git init</code> ครั้งแรก</td>
+<td><span class="star">★</span><span class="star">★</span> <strong>รหัสผ่านกล้องหลุดเข้าไฟล์ CSV เกือบหลุดเข้า git จริง</strong> — ffprobe echo URL เต็ม (มีรหัสผ่าน) กลับมาใน stderr ตอน error (เช่น 401) แล้ว <code>probe_cameras.py</code> เขียนข้อความนั้นลง CSV ตรง ๆ โดยไม่ปิดบัง</td>
+<td>เพิ่มฟังก์ชัน <code>redact_url()</code> ปิดบังรหัสผ่านในทุกจุดที่ error/URL อาจถูก print หรือบันทึก — แก้แล้วในโค้ด และเพิ่ม <code>scripts/*.csv</code> ใน <code>.gitignore</code> กันไว้อีกชั้น</td>
+<td>— (แก้ที่โค้ดโดยตรง)</td>
+</tr>
+</tbody>
+</table></div>
+
+  </main>
+</div>
+<script>
+(function () {
+  "use strict";
+  var KEY = "docs-checks-" + (document.body.getAttribute("data-doc") || "x");
+  var boxes = Array.prototype.slice.call(document.querySelectorAll("li.chk input"));
+  var saved = {};
+  try { saved = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { saved = {}; }
+  boxes.forEach(function (box, i) {
+    if (saved[i]) box.checked = true;
+    box.addEventListener("change", function () {
+      saved[i] = box.checked;
+      try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch (e) {}
+    });
+  });
+  var reset = document.querySelector(".checks-reset");
+  if (reset) reset.addEventListener("click", function () {
+    boxes.forEach(function (b) { b.checked = false; });
+    saved = {};
+    try { localStorage.removeItem(KEY); } catch (e) {}
+  });
+
+  var links = {};
+  Array.prototype.forEach.call(document.querySelectorAll(".toc a"), function (a) {
+    links[a.getAttribute("href").slice(1)] = a;
+  });
+  var heads = document.querySelectorAll(".main h2");
+  if (!heads.length || !window.IntersectionObserver) return;
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      var link = links[e.target.id];
+      if (!link || !e.isIntersecting) return;
+      Object.keys(links).forEach(function (k) { links[k].classList.remove("is-active"); });
+      link.classList.add("is-active");
+    });
+  }, { rootMargin: "-8% 0px -80% 0px" });
+  Array.prototype.forEach.call(heads, function (h) { io.observe(h); });
+})();
+</script>
+</body>
+</html>

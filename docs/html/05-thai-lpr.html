@@ -1,0 +1,904 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>05 — การอ่านป้ายทะเบียนไทย (Thai LPR) — ระบบดัชนีสืบค้นภาพ</title>
+<style>
+:root {
+  --ground:#F5F4F2; --surface:#FFFFFF; --surface-2:#EEECE8;
+  --ink:#191714; --ink-2:#57524B; --ink-3:#8A837A;
+  --rule:#DEDAD4; --rule-strong:#C4BEB5;
+  --accent:#A66A00; --accent-ink:#7A4E00; --accent-wash:#F8F0DE;
+  --pass:#216B45; --pass-wash:#E4F0E9; --fail:#A32219; --fail-wash:#F8E6E4;
+  --shadow:0 1px 2px rgba(25,23,20,.05), 0 8px 24px -16px rgba(25,23,20,.28);
+  --font-th:"Leelawadee UI","Noto Sans Thai","Thonburi","Sarabun","Segoe UI",Tahoma,system-ui,sans-serif;
+  --font-mono:ui-monospace,"SF Mono","Cascadia Mono","Segoe UI Mono","Roboto Mono",Menlo,Consolas,monospace;
+  --measure:70ch; --rail:16rem;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground:#141210; --surface:#1C1917; --surface-2:#24201C;
+    --ink:#EFEAE2; --ink-2:#ADA49A; --ink-3:#7C736A;
+    --rule:#332D27; --rule-strong:#4A423A;
+    --accent:#E0A648; --accent-ink:#EFC077; --accent-wash:#2C2313;
+    --pass:#5FBF8C; --pass-wash:#16301F; --fail:#E5796C; --fail-wash:#331A17;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"] {
+  --ground:#141210; --surface:#1C1917; --surface-2:#24201C;
+  --ink:#EFEAE2; --ink-2:#ADA49A; --ink-3:#7C736A;
+  --rule:#332D27; --rule-strong:#4A423A;
+  --accent:#E0A648; --accent-ink:#EFC077; --accent-wash:#2C2313;
+  --pass:#5FBF8C; --pass-wash:#16301F; --fail:#E5796C; --fail-wash:#331A17;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+}
+:root[data-theme="light"] {
+  --ground:#F5F4F2; --surface:#FFFFFF; --surface-2:#EEECE8;
+  --ink:#191714; --ink-2:#57524B; --ink-3:#8A837A;
+  --rule:#DEDAD4; --rule-strong:#C4BEB5;
+  --accent:#A66A00; --accent-ink:#7A4E00; --accent-wash:#F8F0DE;
+  --pass:#216B45; --pass-wash:#E4F0E9; --fail:#A32219; --fail-wash:#F8E6E4;
+  --shadow:0 1px 2px rgba(25,23,20,.05), 0 8px 24px -16px rgba(25,23,20,.28);
+}
+
+* { box-sizing:border-box; }
+body {
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:var(--font-th); font-size:16.5px; line-height:1.85;
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+}
+:where(a){ color:var(--accent-ink); text-decoration-color:color-mix(in srgb, var(--accent) 40%, transparent); text-underline-offset:.22em; }
+:where(a):hover{ text-decoration-color:var(--accent); }
+:where(a,button,input,summary):focus-visible{ outline:2px solid var(--accent); outline-offset:3px; border-radius:3px; }
+
+.page{ display:grid; grid-template-columns:var(--rail) minmax(0,1fr); gap:3.5rem;
+       max-width:78rem; margin:0 auto; padding:0 2rem 6rem; align-items:start; }
+.main{ min-width:0; max-width:var(--measure); }
+@media (max-width:60rem){ .page{ grid-template-columns:minmax(0,1fr); gap:0; padding:0 1.15rem 4rem; } .main{ max-width:none; } }
+
+.masthead{ grid-column:1/-1; border-bottom:1px solid var(--rule);
+           padding:3.5rem 0 2rem; margin-bottom:2.5rem; display:flex; flex-direction:column; gap:.9rem; }
+.masthead__kicker{ font-family:var(--font-mono); font-size:.72rem; letter-spacing:.14em;
+                   text-transform:uppercase; color:var(--ink-3); display:flex; flex-wrap:wrap; gap:.55rem .9rem; align-items:center; }
+.masthead__kicker b{ color:var(--accent-ink); font-weight:600; }
+.masthead__kicker a{ color:var(--ink-3); text-decoration:none; }
+.masthead__kicker a:hover{ color:var(--accent-ink); }
+.masthead h1{ margin:0; font-size:clamp(1.8rem,1.2rem + 2.2vw,2.5rem); line-height:1.35;
+              font-weight:700; letter-spacing:-.005em; text-wrap:balance; }
+.masthead__sub{ margin:0; max-width:56ch; color:var(--ink-2); font-size:1.02rem; }
+
+.toc{ position:sticky; top:2rem; font-size:.875rem; line-height:1.6;
+      border-left:1px solid var(--rule); padding-left:1.1rem; }
+.toc__label{ font-family:var(--font-mono); font-size:.68rem; letter-spacing:.14em;
+             text-transform:uppercase; color:var(--ink-3); margin-bottom:.85rem; }
+.toc ol{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:.1rem; }
+.toc li{ margin:0; }
+.toc a{ display:block; padding:.3rem 0; color:var(--ink-2); text-decoration:none; border-radius:2px; }
+.toc a:hover{ color:var(--ink); }
+.toc a.is-active{ color:var(--accent-ink); font-weight:600; }
+@media (max-width:60rem){
+  .toc{ position:static; border-left:0; border:1px solid var(--rule); border-radius:3px;
+        background:var(--surface); padding:1rem 1.1rem; margin-bottom:2.5rem; }
+  .toc ol{ columns:2; column-gap:1.5rem; }
+  .toc li{ break-inside:avoid; }
+}
+
+h2{ margin:3.4rem 0 1.5rem; padding-bottom:.55rem; border-bottom:2px solid var(--ink);
+    font-size:clamp(1.25rem,1.1rem + .7vw,1.5rem); line-height:1.4; font-weight:700;
+    text-wrap:balance; scroll-margin-top:1.5rem; }
+.main > h2:first-child{ margin-top:0; }
+h3{ margin:2.6rem 0 .9rem; font-size:1.06rem; font-weight:700; line-height:1.5; scroll-margin-top:1.5rem; }
+h4{ margin:1.9rem 0 .6rem; font-size:.95rem; font-weight:700; color:var(--ink-2); }
+p{ margin:0 0 1rem; }
+strong{ font-weight:700; }
+ul,ol{ margin:0 0 1.1rem; padding-left:1.35rem; }
+li{ margin-bottom:.4rem; }
+li:last-child{ margin-bottom:0; }
+li > ul, li > ol { margin-top:.4rem; }
+hr{ border:0; border-top:1px solid var(--rule); margin:2.5rem 0; }
+
+/* ★ ในต้นฉบับ = ระดับความสำคัญ */
+.star{ color:var(--accent); font-size:.9em; }
+
+blockquote{ margin:1.4rem 0; padding:.1rem 0 .1rem 1.1rem;
+            border-left:3px solid var(--rule-strong); color:var(--ink-2); font-size:.96rem; }
+blockquote strong{ color:var(--ink); }
+blockquote > :last-child{ margin-bottom:0; }
+/* blockquote ที่ขึ้นต้นด้วย ★ = คำเตือนสำคัญ */
+blockquote.is-flag{ background:var(--surface); border:1px solid var(--rule);
+                    border-left:4px solid var(--accent); border-radius:2px;
+                    padding:1.05rem 1.25rem; box-shadow:var(--shadow); color:var(--ink); }
+
+.tw{ overflow-x:auto; margin:1.4rem 0; border:1px solid var(--rule); border-radius:3px;
+     background:var(--surface); -webkit-overflow-scrolling:touch; }
+table{ border-collapse:collapse; width:100%; font-size:.93rem; line-height:1.65;
+       font-variant-numeric:tabular-nums; }
+thead th{ background:var(--surface-2); text-align:left; font-weight:700; font-size:.8rem;
+          color:var(--ink-2); padding:.6rem .85rem; border-bottom:1px solid var(--rule-strong); white-space:nowrap; }
+td{ padding:.62rem .85rem; border-bottom:1px solid var(--rule); vertical-align:top; text-align:left; }
+tbody tr:last-child td{ border-bottom:0; }
+td:empty{ min-width:4rem; }
+
+code{ font-family:var(--font-mono); font-size:.875em; background:var(--surface-2);
+      padding:.1em .38em; border-radius:2px; }
+pre{ font-family:var(--font-mono); font-size:.85rem; line-height:1.7; background:var(--surface);
+     border:1px solid var(--rule); border-radius:3px; padding:1rem 1.15rem; margin:1.3rem 0;
+     overflow-x:auto; color:var(--ink); font-variant-numeric:tabular-nums; }
+pre code{ background:none; padding:0; font-size:1em; white-space:pre; }
+
+/* เช็กลิสต์ติ๊กได้ จำสถานะไว้ — ใช้ li.chk เพื่อรองรับรายการซ้อนชั้น */
+ul:has(> li.chk){ list-style:none; margin:1.1rem 0 1.5rem; padding:0; }
+li.chk > ul{ margin:.3rem 0 .5rem 1.8rem; }
+li.chk{ margin:0; }
+li.chk > label{ display:flex; gap:.7rem; align-items:flex-start; padding:.5rem .7rem;
+                border-radius:3px; cursor:pointer; transition:background .12s ease; }
+li.chk > label:hover{ background:var(--surface-2); }
+li.chk input{ appearance:none; flex:0 0 auto; width:1.05rem; height:1.05rem; margin:.38rem 0 0;
+              border:1.5px solid var(--rule-strong); border-radius:2px; background:var(--surface);
+              cursor:pointer; position:relative; }
+li.chk input:checked{ background:var(--pass); border-color:var(--pass); }
+li.chk input:checked::after{ content:""; position:absolute; left:5px; top:1px; width:4px; height:9px;
+                             border:solid var(--surface); border-width:0 2px 2px 0; transform:rotate(42deg); }
+li.chk input:checked + span{ color:var(--ink-3); text-decoration:line-through; text-decoration-thickness:1px; }
+li.chk > label > span{ flex:1; }
+.checks-reset{ font-family:var(--font-mono); font-size:.72rem; letter-spacing:.06em; background:none;
+               border:1px solid var(--rule); border-radius:2px; color:var(--ink-3);
+               padding:.3rem .65rem; cursor:pointer; margin:.4rem 0 1.5rem; display:inline-block; }
+.checks-reset:hover{ color:var(--ink); border-color:var(--rule-strong); }
+
+/* หน้า index */
+.cards{ list-style:none; padding:0; margin:0; display:grid; gap:.65rem; }
+.cards li{ margin:0; }
+.cards a{ display:flex; gap:1rem; align-items:baseline; text-decoration:none; color:inherit;
+          background:var(--surface); border:1px solid var(--rule); border-radius:3px;
+          padding:.9rem 1.1rem; transition:border-color .12s ease, transform .12s ease; }
+.cards a:hover{ border-color:var(--accent); transform:translateX(2px); }
+.cards .n{ font-family:var(--font-mono); font-size:.85rem; color:var(--ink-3); font-variant-numeric:tabular-nums; }
+.cards .t{ font-weight:700; display:block; margin-bottom:.1rem; }
+.cards .d{ color:var(--ink-2); font-size:.92rem; display:block; line-height:1.6; }
+.cards .is-key .t{ color:var(--accent-ink); }
+.cards a.is-key{ border-left:3px solid var(--accent); }
+
+@media print{
+  :root{ --ground:#fff; --surface:#fff; --surface-2:#f2f2f2; --ink:#000; --ink-2:#333; --ink-3:#666;
+         --rule:#bbb; --rule-strong:#888; --accent:#000; --accent-ink:#000; --accent-wash:#f4f4f4; --shadow:none; }
+  body{ font-size:10.5pt; line-height:1.65; }
+  .toc,.checks-reset{ display:none; }
+  .page{ display:block; max-width:none; padding:0; }
+  h2,h3,h4{ page-break-after:avoid; }
+  .tw,pre,blockquote{ page-break-inside:avoid; }
+  a{ text-decoration:none; color:#000; }
+}
+@media (prefers-reduced-motion: reduce){ *{ animation:none !important; transition:none !important; scroll-behavior:auto !important; } }
+html{ scroll-behavior:smooth; }
+</style>
+</head>
+<body data-doc="05-thai-lpr">
+<div class="page">
+  <header class="masthead">
+    <div class="masthead__kicker">
+      <span>เอกสาร 05</span><span>·</span><span>ระบบดัชนีสืบค้นภาพจากกล้องวงจรปิด</span><span>·</span><a href="index.html"><b>สารบัญทั้งหมด</b></a>
+    </div>
+    <h1>การอ่านป้ายทะเบียนไทย (Thai LPR)</h1>
+    <p class="masthead__sub"><strong>Frigate อ่านป้ายทะเบียนไทยไม่ได้</strong> — LPR ในตัวใช้ PaddleOCR รุ่น Latin/Chinese เท่านั้น จึงต้อง <strong>ปิด <code>lpr</code> ใน Frigate</strong> แล้วสร้างท่อประมวลผลของเราเองที่ <code>services/common/analytics/</code></p>
+  </header>
+  <nav class="toc" aria-label="สารบัญ">
+    <div class="toc__label">สารบัญ</div>
+    <ol>
+      <li><a href="#1-ภาพรวมท่อประมวลผล">1. ภาพรวมท่อประมวลผล</a></li>
+      <li><a href="#2-รูปแบบป้ายทะเบียนไทย">2. รูปแบบป้ายทะเบียนไทย</a></li>
+      <li><a href="#3-ชุดอักขระ">3. ชุดอักขระ</a></li>
+      <li><a href="#4-ตารางอักษรที่-ocr-สับสน">4. ★★ ตารางอักษรที่ OCR สับสน</a></li>
+      <li><a href="#5-อัลกอริทึม-plate_normalize-py">5. อัลกอริทึม plate_normalize.py</a></li>
+      <li><a href="#6-รายชื่อจังหวัด-gazetteer">6. รายชื่อจังหวัด (Gazetteer)</a></li>
+      <li><a href="#7-การค้นหาแบบ-fuzzy">7. การค้นหาแบบ Fuzzy</a></li>
+      <li><a href="#8-โมเดลที่ใช้">8. โมเดลที่ใช้</a></li>
+      <li><a href="#9-ชุดทดสอบ-tests-test_plate_normalize-py">9. ชุดทดสอบ (tests/test_plate_normalize.py)</a></li>
+      <li><a href="#10-ความแม่นยำที่คาดหวังและวิธีวัด">10. ความแม่นยำที่คาดหวังและวิธีวัด</a></li>
+      <li><a href="#เอกสารที่เกี่ยวข้อง">เอกสารที่เกี่ยวข้อง</a></li>
+    </ol>
+  </nav>
+  <main class="main">
+<hr />
+<h2 id="1-ภาพรวมท่อประมวลผล">1. ภาพรวมท่อประมวลผล</h2>
+<pre><code>Frigate ตรวจพบ car / motorcycle
+        │
+        ▼
+1. ดึง snapshot ที่คมที่สุดของ track นั้นจาก Frigate API
+        │
+        ▼
+2. plate_detect.py — YOLO หาตำแหน่งป้ายในภาพรถ
+        │
+        ▼
+3. เตรียมภาพ: warp perspective ให้ป้ายตรง + CLAHE + upscale
+        │
+        ▼
+4. thai_ocr.py — PaddleOCR th_PP-OCRv5_mobile_rec (แยกอ่าน 2 บรรทัด)
+        │
+        ▼
+5. plate_normalize.py — <span class="star">★</span> หัวใจของความแม่นยำ
+        │  • แปลงเลขไทย → เลขอารบิก
+        │  • แก้อักษรที่ OCR สับสน
+        │  • ตรวจว่าเข้าเทมเพลตป้ายไทย
+        │  • จับคู่ชื่อจังหวัดกับ gazetteer
+        │
+        ▼
+6. Majority vote รวมผลหลายเฟรมของ track เดียวกัน
+        │
+        ▼
+7. บันทึกลงตาราง plates (เก็บทั้ง raw_text และ plate_norm)
+</code></pre>
+<hr />
+<h2 id="2-รูปแบบป้ายทะเบียนไทย">2. รูปแบบป้ายทะเบียนไทย</h2>
+<h3 id="2-1-โครงสร้าง-2-บรรทัด">2.1 โครงสร้าง 2 บรรทัด</h3>
+<pre><code>┌─────────────────────────┐
+│      1กก  1234          │  ← บรรทัดบน: หมวดอักษร + เลขทะเบียน
+│    กรุงเทพมหานคร         │  ← บรรทัดล่าง: จังหวัด
+└─────────────────────────┘
+</code></pre>
+<h3 id="2-2-รูปแบบบรรทัดบน">2.2 รูปแบบบรรทัดบน</h3>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>รูปแบบ</th>
+<th>ตัวอย่าง</th>
+<th>หมายเหตุ</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>[เลข 1][พยัญชนะ 2] [เลข 1–4]</code></td>
+<td><code>1กก 1234</code></td>
+<td>รูปแบบปัจจุบัน (พบมากที่สุด)</td>
+</tr>
+<tr>
+<td><code>[พยัญชนะ 2] [เลข 1–4]</code></td>
+<td><code>กท 5678</code></td>
+<td>รูปแบบเดิม ยังพบได้มาก</td>
+</tr>
+<tr>
+<td><code>[พยัญชนะ 1] [เลข 1–4]</code></td>
+<td><code>ก 1234</code></td>
+<td>พบน้อย</td>
+</tr>
+<tr>
+<td><code>[เลข 1][พยัญชนะ 1] [เลข 1–4]</code></td>
+<td><code>1ก 234</code></td>
+<td>พบน้อย</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>Regex สำหรับตรวจรูปแบบ</strong> (หลัง normalize แล้ว ตัดช่องว่างออก)</p>
+<pre><code>^([0-9]?)([ก-ฮ]{1,3})([0-9]{1,4})$
+</code></pre>
+<ul>
+<li>กลุ่ม 1 = เลขนำหน้า (อาจไม่มี)</li>
+<li>กลุ่ม 2 = หมวดอักษร 1–3 ตัว (ปกติ 1–2)</li>
+<li>กลุ่ม 3 = เลขทะเบียน 1–4 หลัก</li>
+</ul>
+<h3 id="2-3-ป้ายมอเตอร์ไซค์">2.3 ป้ายมอเตอร์ไซค์</h3>
+<ul>
+<li><strong>มีเฉพาะด้านหลัง ไม่มีป้ายหน้า</strong> → ดูผลกระทบต่อการวางกล้องใน <a href="10-chokepoint-design.html"><code>10-chokepoint-design.md</code></a> หัวข้อ 3.1</li>
+<li>ขนาดเล็กกว่ารถยนต์มาก (~17.5 × 22 ซม. เทียบกับ 34 × 16 ซม.)</li>
+<li>ตัวอักษรสูง ~5 ซม. เทียบกับรถยนต์ ~7 ซม. → <strong>เป็นตัวกำหนดเกณฑ์ FOV ของทั้งระบบ</strong></li>
+<li>บางรุ่นจัดวาง 3 บรรทัด (หมวด / เลข / จังหวัด) ต้องรองรับด้วย</li>
+</ul>
+<h3 id="2-4-สีป้ายบอกประเภทรถ">2.4 สีป้ายบอกประเภทรถ</h3>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>สีพื้น / สีอักษร</th>
+<th>ประเภท</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ขาว / ดำ</td>
+<td>รถยนต์นั่งส่วนบุคคลไม่เกิน 7 คน</td>
+</tr>
+<tr>
+<td>ขาว / น้ำเงิน</td>
+<td>รถยนต์นั่งส่วนบุคคลเกิน 7 คน (รถตู้)</td>
+</tr>
+<tr>
+<td>ขาว / เขียว</td>
+<td>รถยนต์บรรทุกส่วนบุคคล (กระบะ)</td>
+</tr>
+<tr>
+<td>เหลือง / ดำ</td>
+<td>รถรับจ้าง (แท็กซี่, สามล้อ)</td>
+</tr>
+<tr>
+<td>เขียว / ขาว</td>
+<td>รถบริการธุรกิจ/ทัศนาจร</td>
+</tr>
+<tr>
+<td>แดง / ดำ</td>
+<td>ป้ายแดง (ยังไม่จดทะเบียน)</td>
+</tr>
+<tr>
+<td>ฟ้า / ขาว</td>
+<td>รถสถานทูต/องค์การระหว่างประเทศ</td>
+</tr>
+</tbody>
+</table></div>
+<blockquote>
+<p><strong>ยืนยันกับข้อมูลกรมการขนส่งทางบกก่อนนำไปใช้เป็นเกณฑ์ตัดสิน</strong> — ตารางนี้ใช้เป็น attribute เสริมเพื่อช่วยกรองผลค้นหา ไม่ใช่ข้อมูลทางกฎหมาย</p>
+<p>การแยกสีป้ายต้องใช้ภาพจากกล้อง <code>overview</code> (ภาพสี) <strong>ไม่ใช่กล้อง <code>lpr</code></strong> ที่เปิด IR แล้วได้ภาพขาวดำ</p>
+</blockquote>
+<hr />
+<h2 id="3-ชุดอักขระ">3. ชุดอักขระ</h2>
+<h3 id="3-1-พยัญชนะไทยที่ใช้บนป้าย">3.1 พยัญชนะไทยที่ใช้บนป้าย</h3>
+<p>พยัญชนะไทยมี 44 ตัว แต่ <strong>ฃ (ขวด) และ ฅ (คน) เป็นอักษรเลิกใช้ ไม่ปรากฏบนป้าย</strong></p>
+<pre><code>ก ข ค ฆ ง จ ฉ ช ซ ฌ ญ ฎ ฏ ฐ ฑ ฒ ณ ด ต ถ ท ธ น
+บ ป ผ ฝ พ ฟ ภ ม ย ร ล ว ศ ษ ส ห ฬ อ ฮ
+</code></pre>
+<blockquote>
+<p>ตรวจสอบกับข้อมูลจริงที่เก็บได้ในเฟส 2 แล้วตัดตัวที่ไม่เคยพบออกจาก charset เพื่อลดโอกาส OCR อ่านผิด</p>
+</blockquote>
+<h3 id="3-2-ตัวเลข">3.2 ตัวเลข</h3>
+<p>ป้ายไทยใช้ <strong>เลขอารบิก</strong> เป็นหลัก แต่ OCR อาจตีความเป็นเลขไทยได้ จึงต้องแปลงทุกครั้ง:</p>
+<pre><code>๐→0  ๑→1  ๒→2  ๓→3  ๔→4  ๕→5  ๖→6  ๗→7  ๘→8  ๙→9
+</code></pre>
+<hr />
+<h2 id="4-ตารางอักษรที่-ocr-สับสน">4. <span class="star">★</span><span class="star">★</span> ตารางอักษรที่ OCR สับสน</h2>
+<p><strong>นี่คือส่วนที่ทำให้ความแม่นยำต่างกันมากที่สุด</strong> — OCR อ่านผิด 1 ตัวเป็นเรื่องปกติ ระบบต้องรับมือได้</p>
+<h3 id="4-1-พยัญชนะไทย">4.1 พยัญชนะไทย</h3>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>ระดับความสับสน</th>
+<th>คู่อักษร</th>
+<th>สาเหตุ</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>สูงมาก</strong></td>
+<td><code>ก ↔ ถ ↔ ภ</code></td>
+<td>โครงสร้างคล้ายกัน ต่างที่หัวและหาง</td>
+</tr>
+<tr>
+<td><strong>สูงมาก</strong></td>
+<td><code>ข ↔ ช</code></td>
+<td>ต่างแค่หัวบนซ้าย</td>
+</tr>
+<tr>
+<td><strong>สูงมาก</strong></td>
+<td><code>บ ↔ ป</code></td>
+<td>ต่างแค่ขีดบน</td>
+</tr>
+<tr>
+<td><strong>สูงมาก</strong></td>
+<td><code>ผ ↔ ฝ</code></td>
+<td>ต่างแค่หางขวา</td>
+</tr>
+<tr>
+<td><strong>สูงมาก</strong></td>
+<td><code>พ ↔ ฟ</code></td>
+<td>ต่างแค่ขีดบน</td>
+</tr>
+<tr>
+<td><strong>สูงมาก</strong></td>
+<td><code>ล ↔ ส</code></td>
+<td>รูปทรงใกล้เคียงมาก</td>
+</tr>
+<tr>
+<td><strong>สูง</strong></td>
+<td><code>ด ↔ ต</code></td>
+<td>ต่างที่ปลายบนขวา</td>
+</tr>
+<tr>
+<td><strong>สูง</strong></td>
+<td><code>ณ ↔ ฌ</code></td>
+<td>ซับซ้อนทั้งคู่ เส้นเยอะ</td>
+</tr>
+<tr>
+<td><strong>สูง</strong></td>
+<td><code>ฑ ↔ ท</code></td>
+<td>ต่างที่หัว</td>
+</tr>
+<tr>
+<td><strong>กลาง</strong></td>
+<td><code>ม ↔ ฆ</code></td>
+<td></td>
+</tr>
+<tr>
+<td><strong>กลาง</strong></td>
+<td><code>ร ↔ ธ</code></td>
+<td></td>
+</tr>
+<tr>
+<td><strong>กลาง</strong></td>
+<td><code>น ↔ ม</code></td>
+<td></td>
+</tr>
+<tr>
+<td><strong>กลาง</strong></td>
+<td><code>ว ↔ ร</code></td>
+<td></td>
+</tr>
+<tr>
+<td><strong>กลาง</strong></td>
+<td><code>ย ↔ ผ</code></td>
+<td></td>
+</tr>
+<tr>
+<td><strong>กลาง</strong></td>
+<td><code>ซ ↔ ช</code></td>
+<td>ต่างแค่หางล่าง</td>
+</tr>
+<tr>
+<td><strong>กลาง</strong></td>
+<td><code>ห ↔ ษ</code></td>
+<td></td>
+</tr>
+<tr>
+<td><strong>กลาง</strong></td>
+<td><code>ฎ ↔ ฏ</code></td>
+<td>ต่างที่ปลายบน</td>
+</tr>
+<tr>
+<td><strong>กลาง</strong></td>
+<td><code>ฐ ↔ ฎ</code></td>
+<td></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="4-2-ตัวเลขและอักขระข้ามชุด">4.2 ตัวเลขและอักขระข้ามชุด</h3>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>คู่</th>
+<th>หมายเหตุ</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>0 ↔ O ↔ o</code></td>
+<td>OCR อาจคืนตัวอักษรละติน</td>
+</tr>
+<tr>
+<td><code>1 ↔ 7 ↔ I ↔ l</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>5 ↔ 6</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>8 ↔ B ↔ 3</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>2 ↔ Z</code></td>
+<td></td>
+</tr>
+</tbody>
+</table></div>
+<blockquote class="is-flag">
+<p><span class="star">★</span> <strong>ตารางนี้เป็นจุดเริ่มต้น ไม่ใช่ค่าสุดท้าย</strong>
+ในเฟส 3 ต้องวัดจากข้อมูลจริง: เก็บคู่ (ค่าที่ OCR อ่านได้, ค่าที่ถูกต้อง) จากชุดทดสอบ แล้วสร้าง <strong>confusion matrix จริงของกล้องแต่ละไซต์</strong> ตารางที่ปรับจากข้อมูลจริงจะแม่นกว่าตารางทฤษฎีนี้มาก</p>
+</blockquote>
+<h3 id="4-3-การใช้งานในโค้ด">4.3 การใช้งานในโค้ด</h3>
+<p>เก็บเป็นน้ำหนักสำหรับ weighted edit distance:</p>
+<pre><code class="language-python"># services/common/analytics/plate_normalize.py
+CONFUSION_COST = {
+    frozenset(&quot;กถ&quot;): 0.2,   # สับสนบ่อยมาก -&gt; ค่าปรับต่ำ
+    frozenset(&quot;กภ&quot;): 0.2,
+    frozenset(&quot;ถภ&quot;): 0.2,
+    frozenset(&quot;ขช&quot;): 0.2,
+    frozenset(&quot;บป&quot;): 0.2,
+    frozenset(&quot;ผฝ&quot;): 0.2,
+    frozenset(&quot;พฟ&quot;): 0.2,
+    frozenset(&quot;ลส&quot;): 0.2,
+    frozenset(&quot;ดต&quot;): 0.3,
+    frozenset(&quot;ณฌ&quot;): 0.3,
+    frozenset(&quot;ฑท&quot;): 0.3,
+    frozenset(&quot;มฆ&quot;): 0.5,
+    frozenset(&quot;รธ&quot;): 0.5,
+    # ... ตามตารางข้างบน
+}
+DEFAULT_SUBSTITUTION_COST = 1.0
+</code></pre>
+<p><strong>ตีความ:</strong> ถ้าผู้ใช้ค้น <code>1กก1234</code> แล้วในฐานข้อมูลมี <code>1ถก1234</code> ระยะห่างจะเป็น 0.2 (ไม่ใช่ 1.0) → ยังติดอันดับผลลัพธ์ต้น ๆ</p>
+<hr />
+<h2 id="5-อัลกอริทึม-plate_normalize-py">5. อัลกอริทึม <code>plate_normalize.py</code></h2>
+<h3 id="5-1-ขั้นตอน">5.1 ขั้นตอน</h3>
+<pre><code>input: raw_text จาก OCR (2 บรรทัด), char_confs
+
+1. ทำความสะอาด
+   • ตัดช่องว่าง ขีด จุด และอักขระที่ไม่ใช่ [ก-ฮ0-9]
+   • แปลงเลขไทย ๐-๙ → 0-9
+   • แปลงอักษรละตินที่ปนมาเป็นเลข (O→0, I→1, ...)
+
+2. แยกบรรทัด
+   • บรรทัดที่มีตัวเลข = บรรทัดหมวด+เลขทะเบียน
+   • บรรทัดที่มีแต่พยัญชนะและสระ = ชื่อจังหวัด
+
+3. ตรวจเทมเพลตบรรทัดบน ด้วย regex ในหัวข้อ 2.2
+   ├─ เข้ารูปแบบ  → ไปข้อ 5
+   └─ ไม่เข้ารูปแบบ → ไปข้อ 4
+
+4. แก้ด้วยตารางสับสน (repair)
+   • ลองสลับตัวที่สับสนได้ทีละตัว (จำกัดไม่เกิน 2 ตัว เพื่อไม่ให้ระเบิด)
+   • ให้คะแนนแต่ละความเป็นไปได้ = (เข้าเทมเพลตไหม) × (ค่า confidence เดิม) ÷ (ค่าปรับการสลับ)
+   • เลือกตัวที่คะแนนสูงสุด ถ้าไม่มีตัวไหนเข้าเทมเพลตเลย เก็บของเดิมแล้วตั้ง flag
+
+5. จับคู่จังหวัด
+   • เทียบบรรทัดล่างกับ gazetteer 77 รายการ ด้วย Levenshtein
+   • ถ้าระยะห่าง ≤ 3 → รับเป็นจังหวัดนั้น
+   • ถ้าเกิน → เก็บเป็น NULL แต่ยังใช้ผลบรรทัดบนได้
+
+6. คืนค่า
+   • plate_norm  = &quot;1กก1234&quot;        (ไม่มีช่องว่าง สำหรับใช้ค้นหา)
+   • raw_text    = ข้อความดิบจาก OCR (ห้ามทิ้ง)
+   • province    = &quot;กรุงเทพมหานคร&quot; หรือ NULL
+   • ocr_conf    = ค่าความมั่นใจรวม
+   • char_confs  = ความมั่นใจรายตัวอักษร (JSONB)
+   • flags       = [&quot;template_mismatch&quot;] ถ้ามี
+</code></pre>
+<h3 id="5-2-ห้ามทิ้ง-raw_text">5.2 <span class="star">★</span> ห้ามทิ้ง <code>raw_text</code></h3>
+<p>เก็บข้อความดิบจาก OCR ไว้เสมอ เพราะ:</p>
+<ul>
+<li>ใช้ debug ว่าอ่านผิดตรงไหน</li>
+<li>ใช้สร้าง confusion matrix จริงในเฟส 3</li>
+<li>ถ้าอัลกอริทึม normalize มีบั๊ก ยังกู้ข้อมูลเดิมได้โดยไม่ต้องประมวลผลภาพใหม่</li>
+</ul>
+<h3 id="5-3-majority-vote-ต่อ-track">5.3 Majority vote ต่อ track</h3>
+<p>รถผ่านจุดคอขวดช้า ๆ จะได้หลายเฟรม → <strong>อย่าเชื่อเฟรมเดียว</strong></p>
+<pre><code>สำหรับแต่ละ track:
+  1. เก็บผล OCR ทุกเฟรมที่ได้ (ปกติ 3–15 เฟรม)
+  2. โหวตทีละตำแหน่งตัวอักษร ถ่วงน้ำหนักด้วย char_conf ของเฟรมนั้น
+  3. ประกอบผลลัพธ์แล้วตรวจเทมเพลตอีกครั้ง
+  4. ocr_conf สุดท้าย = ค่าเฉลี่ยถ่วงน้ำหนัก × (สัดส่วนเฟรมที่เห็นตรงกัน)
+</code></pre>
+<p>การโหวตแบบนี้มักดันความแม่นขึ้นได้อีก <strong>5–15 จุดเปอร์เซ็นต์</strong> จากผลเฟรมเดียว</p>
+<hr />
+<h2 id="6-รายชื่อจังหวัด-gazetteer">6. รายชื่อจังหวัด (Gazetteer)</h2>
+<p>77 รายการ = 76 จังหวัด + กรุงเทพมหานคร ใช้จับคู่บรรทัดล่างของป้าย</p>
+<h3 id="ภาคเหนือ-9">ภาคเหนือ (9)</h3>
+<p><code>เชียงราย</code> <code>เชียงใหม่</code> <code>น่าน</code> <code>พะเยา</code> <code>แพร่</code> <code>แม่ฮ่องสอน</code> <code>ลำปาง</code> <code>ลำพูน</code> <code>อุตรดิตถ์</code></p>
+<h3 id="ภาคตะวันออกเฉียงเหนือ-20">ภาคตะวันออกเฉียงเหนือ (20)</h3>
+<p><code>กาฬสินธุ์</code> <code>ขอนแก่น</code> <code>ชัยภูมิ</code> <code>นครพนม</code> <code>นครราชสีมา</code> <code>บึงกาฬ</code> <code>บุรีรัมย์</code> <code>มหาสารคาม</code> <code>มุกดาหาร</code> <code>ยโสธร</code> <code>ร้อยเอ็ด</code> <code>เลย</code> <code>ศรีสะเกษ</code> <code>สกลนคร</code> <code>สุรินทร์</code> <code>หนองคาย</code> <code>หนองบัวลำภู</code> <code>อำนาจเจริญ</code> <code>อุดรธานี</code> <code>อุบลราชธานี</code></p>
+<h3 id="ภาคกลาง-21-กรุงเทพมหานคร">ภาคกลาง (21) + กรุงเทพมหานคร</h3>
+<p><code>กรุงเทพมหานคร</code> <code>กำแพงเพชร</code> <code>ชัยนาท</code> <code>นครนายก</code> <code>นครปฐม</code> <code>นครสวรรค์</code> <code>นนทบุรี</code> <code>ปทุมธานี</code> <code>พระนครศรีอยุธยา</code> <code>พิจิตร</code> <code>พิษณุโลก</code> <code>เพชรบูรณ์</code> <code>ลพบุรี</code> <code>สมุทรปราการ</code> <code>สมุทรสงคราม</code> <code>สมุทรสาคร</code> <code>สระบุรี</code> <code>สิงห์บุรี</code> <code>สุโขทัย</code> <code>สุพรรณบุรี</code> <code>อ่างทอง</code> <code>อุทัยธานี</code></p>
+<h3 id="ภาคตะวันออก-7">ภาคตะวันออก (7)</h3>
+<p><code>จันทบุรี</code> <code>ฉะเชิงเทรา</code> <code>ชลบุรี</code> <code>ตราด</code> <code>ปราจีนบุรี</code> <code>ระยอง</code> <code>สระแก้ว</code></p>
+<h3 id="ภาคตะวันตก-5">ภาคตะวันตก (5)</h3>
+<p><code>กาญจนบุรี</code> <code>ตาก</code> <code>ประจวบคีรีขันธ์</code> <code>เพชรบุรี</code> <code>ราชบุรี</code></p>
+<h3 id="ภาคใต้-14">ภาคใต้ (14)</h3>
+<p><code>กระบี่</code> <code>ชุมพร</code> <code>ตรัง</code> <code>นครศรีธรรมราช</code> <code>นราธิวาส</code> <code>ปัตตานี</code> <code>พังงา</code> <code>พัทลุง</code> <code>ภูเก็ต</code> <code>ยะลา</code> <code>ระนอง</code> <code>สงขลา</code> <code>สตูล</code> <code>สุราษฎร์ธานี</code></p>
+<h3 id="6-1-กลุ่มจังหวัดที่จับคู่ผิดกันง่าย">6.1 กลุ่มจังหวัดที่จับคู่ผิดกันง่าย</h3>
+<p>ต้องระวังเป็นพิเศษเพราะชื่อคล้ายกัน:</p>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>กลุ่ม</th>
+<th>หมายเหตุ</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>นครปฐม</code> / <code>นครพนม</code> / <code>นครนายก</code> / <code>นครสวรรค์</code> / <code>นครราชสีมา</code> / <code>นครศรีธรรมราช</code></td>
+<td>ขึ้นต้น &quot;นคร&quot; เหมือนกัน 6 จังหวัด</td>
+</tr>
+<tr>
+<td><code>สมุทรปราการ</code> / <code>สมุทรสงคราม</code> / <code>สมุทรสาคร</code></td>
+<td>ขึ้นต้น &quot;สมุทร&quot; เหมือนกัน</td>
+</tr>
+<tr>
+<td><code>ชัยนาท</code> / <code>ชัยภูมิ</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>สุรินทร์</code> / <code>สุราษฎร์ธานี</code> / <code>สุพรรณบุรี</code> / <code>สุโขทัย</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>อุดรธานี</code> / <code>อุตรดิตถ์</code> / <code>อุทัยธานี</code> / <code>อุบลราชธานี</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>ลำปาง</code> / <code>ลำพูน</code></td>
+<td></td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>→ ตอนจับคู่ ให้เทียบทั้งคำ ไม่ใช่แค่ 3–4 ตัวแรก</strong> และตั้งเกณฑ์ระยะห่างเข้มขึ้นสำหรับกลุ่มเหล่านี้</p>
+<h3 id="6-2-ใช้จังหวัดช่วยยืนยันความถูกต้องรวม">6.2 <span class="star">★</span> ใช้จังหวัดช่วยยืนยันความถูกต้องรวม</h3>
+<p>ถ้าอ่านจังหวัดได้ชัด แต่บรรทัดบนไม่เข้าเทมเพลต → ควรเชื่อว่าเป็นป้ายจริงและพยายามซ่อมบรรทัดบนต่อ
+ถ้าอ่านจังหวัดไม่ได้เลยและบรรทัดบนก็ไม่เข้าเทมเพลต → น่าจะไม่ใช่ป้าย (อาจเป็นสติกเกอร์หรือข้อความอื่นบนรถ) ควรทิ้ง</p>
+<hr />
+<h2 id="7-การค้นหาแบบ-fuzzy">7. การค้นหาแบบ Fuzzy</h2>
+<p><strong>ผู้ใช้ต้องหาเจอแม้ระบบอ่านผิด 1–2 ตัว</strong> นี่คือเหตุผลที่การค้นหาต้องไม่เป็นแบบ exact match</p>
+<h3 id="7-1-กลยุทธ์สองชั้น">7.1 กลยุทธ์สองชั้น</h3>
+<pre><code class="language-sql">-- ชั้นที่ 1: กรองเร็วด้วย trigram index (GIN)
+SELECT ... FROM plates
+WHERE plate_norm % :query          -- ตัวดำเนินการ similarity ของ pg_trgm
+ORDER BY similarity(plate_norm, :query) DESC
+LIMIT 200;
+
+-- ชั้นที่ 2: จัดอันดับใหม่ในแอป ด้วย weighted edit distance
+--            ที่ใช้ตารางอักษรสับสนในหัวข้อ 4
+</code></pre>
+<p><strong>เหตุผลที่แบ่งสองชั้น:</strong> <code>pg_trgm</code> เร็วมากเพราะมี index แต่ไม่รู้จักตารางอักษรสับสนของไทย ส่วน weighted edit distance แม่นกว่าแต่ช้าเกินกว่าจะรันทั้งตาราง → กรองหยาบด้วยชั้นแรก แล้วจัดอันดับละเอียดด้วยชั้นสอง</p>
+<h3 id="7-2-สิ่งที่ต้องรองรับในช่องค้นหา">7.2 สิ่งที่ต้องรองรับในช่องค้นหา</h3>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>ผู้ใช้พิมพ์</th>
+<th>ต้องเจอ</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>1กก1234</code></td>
+<td><code>1กก1234</code> (ตรงเป๊ะ)</td>
+</tr>
+<tr>
+<td><code>1กก 1234</code></td>
+<td>เหมือนกัน (ตัดช่องว่างก่อน)</td>
+</tr>
+<tr>
+<td><code>1ถก1234</code></td>
+<td><code>1กก1234</code> (อ่านผิด 1 ตัว)</td>
+</tr>
+<tr>
+<td><code>กก1234</code></td>
+<td><code>1กก1234</code> (จำเลขนำหน้าไม่ได้)</td>
+</tr>
+<tr>
+<td><code>1234</code></td>
+<td>ทุกป้ายที่ลงท้าย <code>1234</code></td>
+</tr>
+<tr>
+<td><code>1กก</code></td>
+<td>ทุกป้ายในหมวด <code>1กก</code></td>
+</tr>
+<tr>
+<td><code>1กก1234 ชลบุรี</code></td>
+<td>กรองจังหวัดด้วย</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="7-3-การแสดงผล">7.3 การแสดงผล</h3>
+<ul>
+<li>แสดง <strong>ค่าความมั่นใจ</strong> ทุกแถว เพื่อให้ผู้ใช้ตัดสินใจเองว่าจะไล่ดูอันไหนก่อน</li>
+<li>แสดง <strong>ภาพ crop ของป้าย</strong> ข้างผลลัพธ์เสมอ — ให้ตามนุษย์ตัดสินขั้นสุดท้าย</li>
+<li>ถ้ามี flag <code>template_mismatch</code> ให้ทำเครื่องหมายเตือน</li>
+</ul>
+<hr />
+<h2 id="8-โมเดลที่ใช้">8. โมเดลที่ใช้</h2>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>ขั้นตอน</th>
+<th>โมเดล</th>
+<th>หมายเหตุ</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ตรวจตำแหน่งป้าย</td>
+<td>YOLOv8n fine-tune บน dataset ป้ายไทย</td>
+<td>มีชุดข้อมูลสาธารณะบน Roboflow ใช้เป็นจุดเริ่ม</td>
+</tr>
+<tr>
+<td>OCR</td>
+<td><code>th_PP-OCRv5_mobile_rec</code> (PaddleOCR)</td>
+<td>ความแม่นบนข้อความไทยทั่วไป ~82.7% — <strong>ต้อง fine-tune ด้วยภาพป้ายจริง</strong></td>
+</tr>
+<tr>
+<td>Runtime</td>
+<td>ONNX / OpenVINO บน iGPU Intel</td>
+<td></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="8-1-แผนการ-fine-tune-เฟส-3">8.1 แผนการ fine-tune (เฟส 3)</h3>
+<ol>
+<li>ใช้ชุดภาพที่เก็บไว้ตอนตรวจรับงาน (<code>samples/&lt;SITE_ID&gt;/</code>) ติดป้ายกำกับด้วยมือ ~500–1,000 ป้าย</li>
+<li>รวมภาพจากหลายไซต์เพื่อให้โมเดลทนต่อสภาพที่ต่างกัน</li>
+<li>เน้นเก็บกรณีที่ยาก: <strong>กลางคืน มอเตอร์ไซค์ ป้ายสกปรก ป้ายเอียง</strong></li>
+<li>วัดผลด้วย <strong>character-level accuracy</strong> ไม่ใช่แค่ exact match ทั้งป้าย (จะได้เห็นว่าดีขึ้นแค่ไหน)</li>
+</ol>
+<hr />
+<h2 id="9-ชุดทดสอบ-tests-test_plate_normalize-py">9. ชุดทดสอบ (<code>tests/test_plate_normalize.py</code>)</h2>
+<blockquote>
+<p><strong>ไฟล์นี้ต้องแน่นที่สุดในโปรเจกต์</strong> เพราะเป็นจุดที่ regression ง่ายที่สุด</p>
+</blockquote>
+<h3 id="9-1-กรณีที่ต้องครอบคลุม-50-เคส">9.1 กรณีที่ต้องครอบคลุม (≥ 50 เคส)</h3>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>กลุ่ม</th>
+<th>ตัวอย่าง</th>
+<th>คาดหวัง</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>รูปแบบปัจจุบัน</td>
+<td><code>1กก 1234</code></td>
+<td><code>1กก1234</code></td>
+</tr>
+<tr>
+<td>รูปแบบเดิม</td>
+<td><code>กท 5678</code></td>
+<td><code>กท5678</code></td>
+</tr>
+<tr>
+<td>เลขทะเบียนสั้น</td>
+<td><code>1ขค 7</code></td>
+<td><code>1ขค7</code></td>
+</tr>
+<tr>
+<td>เลขไทย</td>
+<td><code>๑กก ๑๒๓๔</code></td>
+<td><code>1กก1234</code></td>
+</tr>
+<tr>
+<td>ช่องว่างเกิน</td>
+<td><code>1 ก ก  1234</code></td>
+<td><code>1กก1234</code></td>
+</tr>
+<tr>
+<td>อักขระขยะ</td>
+<td><code>1กก-1234.</code></td>
+<td><code>1กก1234</code></td>
+</tr>
+<tr>
+<td>อักษรละตินปน</td>
+<td><code>1กกI234</code></td>
+<td><code>1กก1234</code></td>
+</tr>
+<tr>
+<td><strong>อักษรสับสน 1 ตัว</strong></td>
+<td><code>1ถก1234</code> → ซ่อมได้ไหม</td>
+<td>ตรวจว่าให้ผู้สมัครที่ถูกต้องติดอันดับ</td>
+</tr>
+<tr>
+<td>จังหวัดอ่านเพี้ยน</td>
+<td><code>กรุงเทพมหานคว</code></td>
+<td><code>กรุงเทพมหานคร</code></td>
+</tr>
+<tr>
+<td>จังหวัดกลุ่มคล้ายกัน</td>
+<td><code>นครปฐม</code> vs <code>นครพนม</code></td>
+<td>ต้องไม่สลับกัน</td>
+</tr>
+<tr>
+<td>จังหวัดอ่านไม่ออก</td>
+<td><code>xxxxx</code></td>
+<td><code>province = None</code> แต่บรรทัดบนยังใช้ได้</td>
+</tr>
+<tr>
+<td>ไม่ใช่ป้าย</td>
+<td><code>SUZUKI</code></td>
+<td>ต้องถูกปฏิเสธ</td>
+</tr>
+<tr>
+<td>ป้ายมอเตอร์ไซค์ 3 บรรทัด</td>
+<td></td>
+<td>อ่านได้ถูกต้อง</td>
+</tr>
+<tr>
+<td>ป้ายว่าง/อ่านไม่ได้</td>
+<td><code>&quot;&quot;</code></td>
+<td>ไม่ crash คืน None</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="9-2-ทดสอบ-majority-vote">9.2 ทดสอบ majority vote</h3>
+<ul>
+<li>ให้ผล OCR ปลอม 5 เฟรม ที่มี 3 เฟรมถูกและ 2 เฟรมผิดคนละแบบ → ผลโหวตต้องได้ค่าที่ถูก</li>
+<li>ทุกเฟรมผิดเหมือนกันหมด → ต้องคืนค่าผิดนั้นพร้อม confidence ต่ำ (ไม่ใช่แกล้งบอกว่ามั่นใจ)</li>
+</ul>
+<h3 id="9-3-ทดสอบการค้นหา-fuzzy">9.3 ทดสอบการค้นหา fuzzy</h3>
+<p>ครอบคลุมทุกแถวในตารางหัวข้อ 7.2</p>
+<hr />
+<h2 id="10-ความแม่นยำที่คาดหวังและวิธีวัด">10. ความแม่นยำที่คาดหวังและวิธีวัด</h2>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>สภาพ</th>
+<th>ความแม่นต่อเฟรม</th>
+<th>หลัง majority vote</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>มุมกล้องทั่วไป ไม่ควบคุมสภาพ</td>
+<td>70–85%</td>
+<td>80–90%</td>
+</tr>
+<tr>
+<td><strong>จุดคอขวดที่ออกแบบตามเอกสาร 10</strong></td>
+<td>88–93%</td>
+<td><strong>≥ 95%</strong></td>
+</tr>
+<tr>
+<td>กลางคืนไม่มีไฟเสริม</td>
+<td>30–60%</td>
+<td>50–70%</td>
+</tr>
+<tr>
+<td><strong>กลางคืนมี IR illuminator + shutter ล็อก</strong></td>
+<td>85–92%</td>
+<td><strong>≥ 93%</strong></td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="10-1-วิธีวัด">10.1 วิธีวัด</h3>
+<ol>
+<li>ใช้ชุดภาพจาก <code>samples/&lt;SITE_ID&gt;/</code> (~200 คัน รวมมอเตอร์ไซค์และรถกลางคืน)</li>
+<li>ติดป้ายกำกับด้วยมือ = ground truth</li>
+<li>วัด 2 ตัวเลข:
+<ul>
+<li><strong>Exact match rate</strong> — ป้ายที่อ่านถูกทั้งใบ (ตัวเลขที่ผู้ใช้สนใจ)</li>
+<li><strong>Character accuracy</strong> — สัดส่วนตัวอักษรที่ถูก (ตัวเลขที่บอกว่าปรับปรุงได้แค่ไหน)</li>
+</ul>
+</li>
+<li>แยกรายงานตาม: กลางวัน/กลางคืน, รถยนต์/มอเตอร์ไซค์</li>
+</ol>
+<h3 id="10-2-ถ้าความแม่นต่ำกว่าเป้า-ให้แก้ตามลำดับนี้">10.2 <span class="star">★</span> ถ้าความแม่นต่ำกว่าเป้า ให้แก้ตามลำดับนี้</h3>
+<pre><code>1. ตรวจคุณภาพภาพก่อน  →  ดู 10-chokepoint-design.md หัวข้อ 8
+   (shutter, มุม, ขนาดตัวอักษร, แสง)
+2. ปรับการเตรียมภาพ    →  warp, CLAHE, upscale
+3. ปรับตารางอักษรสับสน →  ใช้ confusion matrix จริงจากข้อมูล
+4. Fine-tune โมเดล OCR →  ขั้นสุดท้าย ใช้ต้นทุนสูงสุด
+</code></pre>
+<p><strong>ห้ามข้ามไปข้อ 4 ก่อน</strong> — ในทางปฏิบัติ ปัญหาส่วนใหญ่แก้ได้ที่ข้อ 1 และการ fine-tune โมเดลบนภาพที่เบลออยู่แล้วจะไม่ช่วยอะไร</p>
+<hr />
+<h2 id="เอกสารที่เกี่ยวข้อง">เอกสารที่เกี่ยวข้อง</h2>
+<ul>
+<li><a href="10-chokepoint-design.html"><code>10-chokepoint-design.md</code></a> — คุณภาพภาพที่ทำให้ LPR แม่น</li>
+<li><a href="04-data-model.html"><code>04-data-model.md</code></a> — ตาราง <code>plates</code> และ index สำหรับค้นหา fuzzy</li>
+<li><a href="06-pdpa-compliance.html"><code>06-pdpa-compliance.md</code></a> — ป้ายทะเบียนกับข้อมูลส่วนบุคคล</li>
+</ul>
+
+  </main>
+</div>
+<script>
+(function () {
+  "use strict";
+  var KEY = "docs-checks-" + (document.body.getAttribute("data-doc") || "x");
+  var boxes = Array.prototype.slice.call(document.querySelectorAll("li.chk input"));
+  var saved = {};
+  try { saved = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { saved = {}; }
+  boxes.forEach(function (box, i) {
+    if (saved[i]) box.checked = true;
+    box.addEventListener("change", function () {
+      saved[i] = box.checked;
+      try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch (e) {}
+    });
+  });
+  var reset = document.querySelector(".checks-reset");
+  if (reset) reset.addEventListener("click", function () {
+    boxes.forEach(function (b) { b.checked = false; });
+    saved = {};
+    try { localStorage.removeItem(KEY); } catch (e) {}
+  });
+
+  var links = {};
+  Array.prototype.forEach.call(document.querySelectorAll(".toc a"), function (a) {
+    links[a.getAttribute("href").slice(1)] = a;
+  });
+  var heads = document.querySelectorAll(".main h2");
+  if (!heads.length || !window.IntersectionObserver) return;
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      var link = links[e.target.id];
+      if (!link || !e.isIntersecting) return;
+      Object.keys(links).forEach(function (k) { links[k].classList.remove("is-active"); });
+      link.classList.add("is-active");
+    });
+  }, { rootMargin: "-8% 0px -80% 0px" });
+  Array.prototype.forEach.call(heads, function (h) { io.observe(h); });
+})();
+</script>
+</body>
+</html>

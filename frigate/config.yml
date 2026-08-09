@@ -1,0 +1,349 @@
+# ============================================================
+#  Frigate — เทมเพลตสำหรับจุดคอขวด (Chokepoint)
+#
+#  ★ อ่าน docs/10-chokepoint-design.md ก่อนแก้ไฟล์นี้
+#    ตำแหน่งและการตั้งค่ากล้องมีผลต่อความแม่นยำมากกว่าค่าในไฟล์นี้
+#
+#  ★ Frigate แทนค่าตัวแปรได้เฉพาะที่ขึ้นต้นด้วย FRIGATE_
+#    ตัวแปรถูก map มาจาก .env ใน docker-compose.yml แล้ว
+# ============================================================
+
+mqtt:
+  enabled: true
+  host: mosquitto
+  port: 1883
+  topic_prefix: frigate
+  client_id: frigate
+  # indexer ของเราฟัง frigate/events และ frigate/tracked_object_update
+
+
+# ------------------------------------------------------------
+#  Detector — ใช้ Intel iGPU ผ่าน OpenVINO
+#
+#  ตรวจว่าใช้ iGPU จริง:  docker compose exec frigate intel_gpu_top
+#  ถ้าค่า Render เป็น 0 ตลอด แปลว่ายังใช้ CPU อยู่
+# ------------------------------------------------------------
+detectors:
+  ov:
+    type: openvino
+    device: GPU
+
+model:
+  # โมเดลที่มาพร้อม Frigate — เบาและพอสำหรับงานจุดคอขวด
+  # ถ้าต้องการแม่นขึ้นและเครื่องยังมีหัวเหลือ ลองเปลี่ยนเป็น yolo-nas
+  # (ดู https://docs.frigate.video/configuration/object_detectors)
+  width: 300
+  height: 300
+  input_tensor: nhwc
+  input_pixel_format: bgr
+  path: /openvino-model/ssdlite_mobilenet_v2.xml
+  labelmap_path: /openvino-model/coco_91cl_bkgr.txt
+
+
+# ------------------------------------------------------------
+#  ★ ปิดฟีเจอร์ที่เราทำเอง
+#
+#  lpr              : ของ Frigate ใช้ PaddleOCR รุ่น Latin/Chinese
+#                     อ่านอักษรไทยไม่ได้  (ดู docs/05-thai-lpr.md)
+#  face_recognition : ไม่คืน embedding ออกมา เราจึงค้นย้อนหลัง
+#                     ด้วยรูปภาพไม่ได้  (ดู ADR-003)
+#  semantic_search  : ค้นได้แค่ระดับภาพรวมฉาก ไม่ใช่ re-ID
+#                     และกิน RAM ≥8GB
+#
+#  การเปิดทั้งสามตัวนี้จะเปลืองซีพียูโดยไม่ได้ประโยชน์
+# ------------------------------------------------------------
+lpr:
+  enabled: false
+
+face_recognition:
+  enabled: false
+
+semantic_search:
+  enabled: false
+
+
+# ------------------------------------------------------------
+#  ffmpeg — ค่าเริ่มต้นสำหรับทุกกล้อง
+# ------------------------------------------------------------
+ffmpeg:
+  # hardware acceleration ของ Intel — ปรับตามรุ่น CPU
+  #   Gen 1-7                      -> preset-vaapi
+  #   Gen 8-12                     -> preset-vaapi | preset-intel-qsv-h264
+  #   Gen 13+ / Core Ultra / N100  -> preset-intel-qsv-h264
+  hwaccel_args: preset-intel-qsv-h264
+
+  # ★ ค่าที่จำเป็นสำหรับกล้องจีน:
+  #   -rtsp_transport tcp  : UDP หลุดง่ายทำให้ภาพแตก
+  #   -an                  : ตัดเสียง — track เสียงเสียทำ ffmpeg พังบ่อย
+  #   +discardcorrupt      : ทิ้งเฟรมเสียแทนที่จะพัง
+  input_args: >-
+    -avoid_negative_ts make_zero
+    -fflags +genpts+discardcorrupt
+    -rtsp_transport tcp
+    -timeout 5000000
+    -use_wallclock_as_timestamps 1
+    -an
+
+
+# ------------------------------------------------------------
+#  ค่าเริ่มต้นของทุกกล้อง
+# ------------------------------------------------------------
+detect:
+  enabled: true
+  fps: 5              # 5 fps พอสำหรับจุดคอขวดที่รถวิ่งช้า
+                      # ถ้า skipped_fps > 0 ให้ลดเป็น 3
+
+objects:
+  track:
+    - person
+    - car
+    - motorcycle
+    - bicycle
+    - truck
+    - bus
+  filters:
+    person:
+      min_score: 0.5
+      threshold: 0.7
+    car:
+      min_score: 0.5
+      threshold: 0.7
+    motorcycle:
+      min_score: 0.4    # มอเตอร์ไซค์เล็กกว่า ตรวจยากกว่า จึงลดเกณฑ์
+      threshold: 0.65
+
+snapshots:
+  enabled: true
+  # ★ ปิดทั้งสองอย่าง — indexer ต้องการภาพสะอาด
+  #   timestamp/bounding box ที่วาดทับจะรบกวน OCR และ face embedding
+  timestamp: false
+  bounding_box: false
+  crop: false
+  quality: 95
+  retain:
+    default: 365
+
+record:
+  enabled: true
+  # ★ ไม่บันทึกต่อเนื่อง — NVR ทำหน้าที่นั้นอยู่แล้ว (ดู ADR-005)
+  #   เราเก็บเฉพาะคลิปสั้นของเหตุการณ์ ไว้ยืนยันว่าใช่สิ่งที่ค้นหา
+  #   แล้วผู้ใช้ไปดูวิดีโอเต็มที่ NVR
+  retain:
+    days: 0
+    mode: all
+  alerts:
+    retain:
+      days: 90
+      mode: motion
+  detections:
+    retain:
+      days: 30
+      mode: motion
+
+
+# ------------------------------------------------------------
+#  go2rtc — restream ทำให้ timestamp นิ่งและลดภาระกล้อง
+#
+#  ★ ให้ Frigate ต่อผ่าน go2rtc แทนต่อกล้องตรง
+#    ช่วยแก้ปัญหา timestamp drift ของกล้องจีน
+#    และทำให้กล้องรับ session น้อยลง (สำคัญเมื่อ NVR ก็ดึงอยู่)
+# ------------------------------------------------------------
+go2rtc:
+  streams:
+    gate_lpr_sub:
+      - rtsp://{FRIGATE_CAMERA_USER}:{FRIGATE_CAMERA_PASSWORD}@{FRIGATE_CAM_GATE_LPR_IP}:554/cam/realmonitor?channel=1&subtype=1
+    gate_lpr_main:
+      - rtsp://{FRIGATE_CAMERA_USER}:{FRIGATE_CAMERA_PASSWORD}@{FRIGATE_CAM_GATE_LPR_IP}:554/cam/realmonitor?channel=1&subtype=0
+    gate_overview_sub:
+      - rtsp://{FRIGATE_CAMERA_USER}:{FRIGATE_CAMERA_PASSWORD}@{FRIGATE_CAM_GATE_OVERVIEW_IP}:554/cam/realmonitor?channel=1&subtype=1
+    gate_overview_main:
+      - rtsp://{FRIGATE_CAMERA_USER}:{FRIGATE_CAMERA_PASSWORD}@{FRIGATE_CAM_GATE_OVERVIEW_IP}:554/cam/realmonitor?channel=1&subtype=0
+    door_face_sub:
+      - rtsp://{FRIGATE_CAMERA_USER}:{FRIGATE_CAMERA_PASSWORD}@{FRIGATE_CAM_DOOR_FACE_IP}:554/cam/realmonitor?channel=1&subtype=1
+    door_face_main:
+      - rtsp://{FRIGATE_CAMERA_USER}:{FRIGATE_CAMERA_PASSWORD}@{FRIGATE_CAM_DOOR_FACE_IP}:554/cam/realmonitor?channel=1&subtype=0
+
+
+# ============================================================
+#  กล้อง
+#
+#  ★ ตั้งชื่อตามรูปแบบ  <SITE_ID>_<จุด>_<บทบาท>
+#    (Frigate ไม่รับเครื่องหมาย - ในชื่อกล้อง จึงใช้ _)
+#    ส่วนใน DB ใช้รูปแบบ WH01-GATE-LPR
+# ============================================================
+cameras:
+
+  # ----------------------------------------------------------
+  #  กล้อง LPR ที่ประตูใหญ่ — อ่านป้ายทะเบียน
+  #
+  #  ★ ต้องหันจับ "ท้ายรถ" เพราะมอเตอร์ไซค์ไทยมีป้ายหลังเท่านั้น
+  #    ดู docs/10-chokepoint-design.md หัวข้อ 3.1
+  #
+  #  ★ ที่ตัวกล้องต้องล็อก shutter 1/500s (ห้าม auto)
+  #    ไม่งั้นกลางคืนป้ายจะเบลออ่านไม่ออก
+  # ----------------------------------------------------------
+  WH01_GATE_LPR:
+    enabled: true
+    ffmpeg:
+      inputs:
+        # substream สำหรับตรวจจับ — เล็กและเร็ว
+        - path: rtsp://127.0.0.1:8554/gate_lpr_sub
+          input_args: preset-rtsp-restream
+          roles: [detect]
+        # mainstream สำหรับบันทึกคลิป — คมพอให้คนดูยืนยันได้
+        - path: rtsp://127.0.0.1:8554/gate_lpr_main
+          input_args: preset-rtsp-restream
+          roles: [record]
+
+    detect:
+      width: 704        # ★ ปรับให้ตรงกับ substream จริงที่ probe_cameras.py วัดได้
+      height: 576
+      fps: 5
+
+    objects:
+      track:
+        - car
+        - motorcycle
+        - truck
+        - bus
+
+    # ------------------------------------------------------
+    #  ★ โซนสำหรับตรวจทิศทาง เข้า/ออก
+    #
+    #  indexer หาทิศทางจากลำดับที่ track เข้าโซน:
+    #     outside -> inside  =  เข้า
+    #     inside -> outside  =  ออก
+    #
+    #  พิกัดเป็นสัดส่วน 0-1 ของเฟรม — ★ ต้องวาดใหม่ตามภาพจริง
+    #  ใช้เครื่องมือวาดโซนในหน้าเว็บ Frigate จะง่ายที่สุด
+    # ------------------------------------------------------
+    zones:
+      gate_outside:
+        coordinates: 0.0,1.0,0.0,0.55,1.0,0.55,1.0,1.0
+        inertia: 3
+        objects: [car, motorcycle, truck, bus]
+      gate_inside:
+        coordinates: 0.0,0.55,0.0,0.15,1.0,0.15,1.0,0.55
+        inertia: 3
+        objects: [car, motorcycle, truck, bus]
+      # โซนถ่ายภาพป้าย — indexer จะประมวลผล OCR เฉพาะตอนวัตถุอยู่ในโซนนี้
+      # เพื่อไม่ให้เสียเวลากับเฟรมที่ป้ายยังเล็กหรือเอียงเกินไป
+      plate_capture:
+        coordinates: 0.15,0.85,0.15,0.35,0.85,0.35,0.85,0.85
+        inertia: 2
+        objects: [car, motorcycle]
+
+    motion:
+      # ★ mask บริเวณที่มีการเคลื่อนไหวตลอดเวลา (ต้นไม้ ถนนนอกรั้ว ป้ายโฆษณา)
+      #   mask ที่ตั้งไม่ดีคือสาเหตุอันดับหนึ่งของ skipped_fps > 0
+      mask: []
+      threshold: 30
+      contour_area: 10
+
+    snapshots:
+      enabled: true
+      required_zones: [plate_capture]
+
+    record:
+      enabled: true
+      alerts:
+        required_zones: [gate_inside, gate_outside]
+
+
+  # ----------------------------------------------------------
+  #  กล้องภาพรวมที่ประตูใหญ่ — ประเภทและสีรถ
+  #
+  #  ★ ห้ามเปิด IR ที่ตัวกล้อง — IR ทำให้ภาพขาวดำ แยกสีรถไม่ได้
+  #    (ต่างจากกล้อง LPR ที่เปิด IR ได้เพราะป้ายสะท้อนแสง IR)
+  # ----------------------------------------------------------
+  WH01_GATE_OVERVIEW:
+    enabled: true
+    ffmpeg:
+      inputs:
+        - path: rtsp://127.0.0.1:8554/gate_overview_sub
+          input_args: preset-rtsp-restream
+          roles: [detect]
+        - path: rtsp://127.0.0.1:8554/gate_overview_main
+          input_args: preset-rtsp-restream
+          roles: [record]
+
+    detect:
+      width: 704
+      height: 576
+      fps: 5
+
+    objects:
+      track:
+        - person
+        - car
+        - motorcycle
+        - truck
+        - bus
+
+    zones:
+      gate_outside:
+        coordinates: 0.0,1.0,0.0,0.55,1.0,0.55,1.0,1.0
+        inertia: 3
+      gate_inside:
+        coordinates: 0.0,0.55,0.0,0.15,1.0,0.15,1.0,0.55
+        inertia: 3
+
+    motion:
+      mask: []
+
+
+  # ----------------------------------------------------------
+  #  กล้องใบหน้าที่ทางเข้าคนเดิน
+  #
+  #  ★ อย่าใช้กล้องประตูรถจับใบหน้า — กระจกสะท้อนและฟิล์มกรองแสง
+  #    ทำให้ล้มเหลวเกือบทั้งหมด
+  #  ★ ติดที่ระดับสายตา 1.6-1.8 ม. มุมก้ม ≤ 15°
+  #  ★ ห้ามมีแสงจ้าอยู่ด้านหลังคน (backlight ทำให้หน้าเป็นเงาดำ)
+  # ----------------------------------------------------------
+  WH01_DOOR_FACE:
+    enabled: true
+    ffmpeg:
+      inputs:
+        - path: rtsp://127.0.0.1:8554/door_face_sub
+          input_args: preset-rtsp-restream
+          roles: [detect]
+        - path: rtsp://127.0.0.1:8554/door_face_main
+          input_args: preset-rtsp-restream
+          roles: [record]
+
+    detect:
+      width: 640
+      height: 480
+      fps: 5
+
+    objects:
+      track:
+        - person
+
+    zones:
+      door_outside:
+        coordinates: 0.0,1.0,0.0,0.5,1.0,0.5,1.0,1.0
+        inertia: 3
+        objects: [person]
+      door_inside:
+        coordinates: 0.0,0.5,0.0,0.0,1.0,0.0,1.0,0.5
+        inertia: 3
+        objects: [person]
+
+    motion:
+      mask: []
+
+
+# ------------------------------------------------------------
+#  อื่น ๆ
+# ------------------------------------------------------------
+birdseye:
+  enabled: false      # ไม่ใช้ ประหยัดซีพียู
+
+telemetry:
+  stats:
+    # เปิด GPU stats เพื่อให้ /api/stats รายงานการใช้งาน iGPU
+    # ใช้ตรวจว่า decode ทำงานบน iGPU จริงหรือไม่
+    intel_gpu_stats: true
+
+version: 0.17

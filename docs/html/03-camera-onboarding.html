@@ -1,0 +1,557 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>03 — การนำกล้องเข้าระบบ (Camera Onboarding) — ระบบดัชนีสืบค้นภาพ</title>
+<style>
+:root {
+  --ground:#F5F4F2; --surface:#FFFFFF; --surface-2:#EEECE8;
+  --ink:#191714; --ink-2:#57524B; --ink-3:#8A837A;
+  --rule:#DEDAD4; --rule-strong:#C4BEB5;
+  --accent:#A66A00; --accent-ink:#7A4E00; --accent-wash:#F8F0DE;
+  --pass:#216B45; --pass-wash:#E4F0E9; --fail:#A32219; --fail-wash:#F8E6E4;
+  --shadow:0 1px 2px rgba(25,23,20,.05), 0 8px 24px -16px rgba(25,23,20,.28);
+  --font-th:"Leelawadee UI","Noto Sans Thai","Thonburi","Sarabun","Segoe UI",Tahoma,system-ui,sans-serif;
+  --font-mono:ui-monospace,"SF Mono","Cascadia Mono","Segoe UI Mono","Roboto Mono",Menlo,Consolas,monospace;
+  --measure:70ch; --rail:16rem;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground:#141210; --surface:#1C1917; --surface-2:#24201C;
+    --ink:#EFEAE2; --ink-2:#ADA49A; --ink-3:#7C736A;
+    --rule:#332D27; --rule-strong:#4A423A;
+    --accent:#E0A648; --accent-ink:#EFC077; --accent-wash:#2C2313;
+    --pass:#5FBF8C; --pass-wash:#16301F; --fail:#E5796C; --fail-wash:#331A17;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"] {
+  --ground:#141210; --surface:#1C1917; --surface-2:#24201C;
+  --ink:#EFEAE2; --ink-2:#ADA49A; --ink-3:#7C736A;
+  --rule:#332D27; --rule-strong:#4A423A;
+  --accent:#E0A648; --accent-ink:#EFC077; --accent-wash:#2C2313;
+  --pass:#5FBF8C; --pass-wash:#16301F; --fail:#E5796C; --fail-wash:#331A17;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+}
+:root[data-theme="light"] {
+  --ground:#F5F4F2; --surface:#FFFFFF; --surface-2:#EEECE8;
+  --ink:#191714; --ink-2:#57524B; --ink-3:#8A837A;
+  --rule:#DEDAD4; --rule-strong:#C4BEB5;
+  --accent:#A66A00; --accent-ink:#7A4E00; --accent-wash:#F8F0DE;
+  --pass:#216B45; --pass-wash:#E4F0E9; --fail:#A32219; --fail-wash:#F8E6E4;
+  --shadow:0 1px 2px rgba(25,23,20,.05), 0 8px 24px -16px rgba(25,23,20,.28);
+}
+
+* { box-sizing:border-box; }
+body {
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:var(--font-th); font-size:16.5px; line-height:1.85;
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+}
+:where(a){ color:var(--accent-ink); text-decoration-color:color-mix(in srgb, var(--accent) 40%, transparent); text-underline-offset:.22em; }
+:where(a):hover{ text-decoration-color:var(--accent); }
+:where(a,button,input,summary):focus-visible{ outline:2px solid var(--accent); outline-offset:3px; border-radius:3px; }
+
+.page{ display:grid; grid-template-columns:var(--rail) minmax(0,1fr); gap:3.5rem;
+       max-width:78rem; margin:0 auto; padding:0 2rem 6rem; align-items:start; }
+.main{ min-width:0; max-width:var(--measure); }
+@media (max-width:60rem){ .page{ grid-template-columns:minmax(0,1fr); gap:0; padding:0 1.15rem 4rem; } .main{ max-width:none; } }
+
+.masthead{ grid-column:1/-1; border-bottom:1px solid var(--rule);
+           padding:3.5rem 0 2rem; margin-bottom:2.5rem; display:flex; flex-direction:column; gap:.9rem; }
+.masthead__kicker{ font-family:var(--font-mono); font-size:.72rem; letter-spacing:.14em;
+                   text-transform:uppercase; color:var(--ink-3); display:flex; flex-wrap:wrap; gap:.55rem .9rem; align-items:center; }
+.masthead__kicker b{ color:var(--accent-ink); font-weight:600; }
+.masthead__kicker a{ color:var(--ink-3); text-decoration:none; }
+.masthead__kicker a:hover{ color:var(--accent-ink); }
+.masthead h1{ margin:0; font-size:clamp(1.8rem,1.2rem + 2.2vw,2.5rem); line-height:1.35;
+              font-weight:700; letter-spacing:-.005em; text-wrap:balance; }
+.masthead__sub{ margin:0; max-width:56ch; color:var(--ink-2); font-size:1.02rem; }
+
+.toc{ position:sticky; top:2rem; font-size:.875rem; line-height:1.6;
+      border-left:1px solid var(--rule); padding-left:1.1rem; }
+.toc__label{ font-family:var(--font-mono); font-size:.68rem; letter-spacing:.14em;
+             text-transform:uppercase; color:var(--ink-3); margin-bottom:.85rem; }
+.toc ol{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:.1rem; }
+.toc li{ margin:0; }
+.toc a{ display:block; padding:.3rem 0; color:var(--ink-2); text-decoration:none; border-radius:2px; }
+.toc a:hover{ color:var(--ink); }
+.toc a.is-active{ color:var(--accent-ink); font-weight:600; }
+@media (max-width:60rem){
+  .toc{ position:static; border-left:0; border:1px solid var(--rule); border-radius:3px;
+        background:var(--surface); padding:1rem 1.1rem; margin-bottom:2.5rem; }
+  .toc ol{ columns:2; column-gap:1.5rem; }
+  .toc li{ break-inside:avoid; }
+}
+
+h2{ margin:3.4rem 0 1.5rem; padding-bottom:.55rem; border-bottom:2px solid var(--ink);
+    font-size:clamp(1.25rem,1.1rem + .7vw,1.5rem); line-height:1.4; font-weight:700;
+    text-wrap:balance; scroll-margin-top:1.5rem; }
+.main > h2:first-child{ margin-top:0; }
+h3{ margin:2.6rem 0 .9rem; font-size:1.06rem; font-weight:700; line-height:1.5; scroll-margin-top:1.5rem; }
+h4{ margin:1.9rem 0 .6rem; font-size:.95rem; font-weight:700; color:var(--ink-2); }
+p{ margin:0 0 1rem; }
+strong{ font-weight:700; }
+ul,ol{ margin:0 0 1.1rem; padding-left:1.35rem; }
+li{ margin-bottom:.4rem; }
+li:last-child{ margin-bottom:0; }
+li > ul, li > ol { margin-top:.4rem; }
+hr{ border:0; border-top:1px solid var(--rule); margin:2.5rem 0; }
+
+/* ★ ในต้นฉบับ = ระดับความสำคัญ */
+.star{ color:var(--accent); font-size:.9em; }
+
+blockquote{ margin:1.4rem 0; padding:.1rem 0 .1rem 1.1rem;
+            border-left:3px solid var(--rule-strong); color:var(--ink-2); font-size:.96rem; }
+blockquote strong{ color:var(--ink); }
+blockquote > :last-child{ margin-bottom:0; }
+/* blockquote ที่ขึ้นต้นด้วย ★ = คำเตือนสำคัญ */
+blockquote.is-flag{ background:var(--surface); border:1px solid var(--rule);
+                    border-left:4px solid var(--accent); border-radius:2px;
+                    padding:1.05rem 1.25rem; box-shadow:var(--shadow); color:var(--ink); }
+
+.tw{ overflow-x:auto; margin:1.4rem 0; border:1px solid var(--rule); border-radius:3px;
+     background:var(--surface); -webkit-overflow-scrolling:touch; }
+table{ border-collapse:collapse; width:100%; font-size:.93rem; line-height:1.65;
+       font-variant-numeric:tabular-nums; }
+thead th{ background:var(--surface-2); text-align:left; font-weight:700; font-size:.8rem;
+          color:var(--ink-2); padding:.6rem .85rem; border-bottom:1px solid var(--rule-strong); white-space:nowrap; }
+td{ padding:.62rem .85rem; border-bottom:1px solid var(--rule); vertical-align:top; text-align:left; }
+tbody tr:last-child td{ border-bottom:0; }
+td:empty{ min-width:4rem; }
+
+code{ font-family:var(--font-mono); font-size:.875em; background:var(--surface-2);
+      padding:.1em .38em; border-radius:2px; }
+pre{ font-family:var(--font-mono); font-size:.85rem; line-height:1.7; background:var(--surface);
+     border:1px solid var(--rule); border-radius:3px; padding:1rem 1.15rem; margin:1.3rem 0;
+     overflow-x:auto; color:var(--ink); font-variant-numeric:tabular-nums; }
+pre code{ background:none; padding:0; font-size:1em; white-space:pre; }
+
+/* เช็กลิสต์ติ๊กได้ จำสถานะไว้ — ใช้ li.chk เพื่อรองรับรายการซ้อนชั้น */
+ul:has(> li.chk){ list-style:none; margin:1.1rem 0 1.5rem; padding:0; }
+li.chk > ul{ margin:.3rem 0 .5rem 1.8rem; }
+li.chk{ margin:0; }
+li.chk > label{ display:flex; gap:.7rem; align-items:flex-start; padding:.5rem .7rem;
+                border-radius:3px; cursor:pointer; transition:background .12s ease; }
+li.chk > label:hover{ background:var(--surface-2); }
+li.chk input{ appearance:none; flex:0 0 auto; width:1.05rem; height:1.05rem; margin:.38rem 0 0;
+              border:1.5px solid var(--rule-strong); border-radius:2px; background:var(--surface);
+              cursor:pointer; position:relative; }
+li.chk input:checked{ background:var(--pass); border-color:var(--pass); }
+li.chk input:checked::after{ content:""; position:absolute; left:5px; top:1px; width:4px; height:9px;
+                             border:solid var(--surface); border-width:0 2px 2px 0; transform:rotate(42deg); }
+li.chk input:checked + span{ color:var(--ink-3); text-decoration:line-through; text-decoration-thickness:1px; }
+li.chk > label > span{ flex:1; }
+.checks-reset{ font-family:var(--font-mono); font-size:.72rem; letter-spacing:.06em; background:none;
+               border:1px solid var(--rule); border-radius:2px; color:var(--ink-3);
+               padding:.3rem .65rem; cursor:pointer; margin:.4rem 0 1.5rem; display:inline-block; }
+.checks-reset:hover{ color:var(--ink); border-color:var(--rule-strong); }
+
+/* หน้า index */
+.cards{ list-style:none; padding:0; margin:0; display:grid; gap:.65rem; }
+.cards li{ margin:0; }
+.cards a{ display:flex; gap:1rem; align-items:baseline; text-decoration:none; color:inherit;
+          background:var(--surface); border:1px solid var(--rule); border-radius:3px;
+          padding:.9rem 1.1rem; transition:border-color .12s ease, transform .12s ease; }
+.cards a:hover{ border-color:var(--accent); transform:translateX(2px); }
+.cards .n{ font-family:var(--font-mono); font-size:.85rem; color:var(--ink-3); font-variant-numeric:tabular-nums; }
+.cards .t{ font-weight:700; display:block; margin-bottom:.1rem; }
+.cards .d{ color:var(--ink-2); font-size:.92rem; display:block; line-height:1.6; }
+.cards .is-key .t{ color:var(--accent-ink); }
+.cards a.is-key{ border-left:3px solid var(--accent); }
+
+@media print{
+  :root{ --ground:#fff; --surface:#fff; --surface-2:#f2f2f2; --ink:#000; --ink-2:#333; --ink-3:#666;
+         --rule:#bbb; --rule-strong:#888; --accent:#000; --accent-ink:#000; --accent-wash:#f4f4f4; --shadow:none; }
+  body{ font-size:10.5pt; line-height:1.65; }
+  .toc,.checks-reset{ display:none; }
+  .page{ display:block; max-width:none; padding:0; }
+  h2,h3,h4{ page-break-after:avoid; }
+  .tw,pre,blockquote{ page-break-inside:avoid; }
+  a{ text-decoration:none; color:#000; }
+}
+@media (prefers-reduced-motion: reduce){ *{ animation:none !important; transition:none !important; scroll-behavior:auto !important; } }
+html{ scroll-behavior:smooth; }
+</style>
+</head>
+<body data-doc="03-camera-onboarding">
+<div class="page">
+  <header class="masthead">
+    <div class="masthead__kicker">
+      <span>เอกสาร 03</span><span>·</span><span>ระบบดัชนีสืบค้นภาพจากกล้องวงจรปิด</span><span>·</span><a href="index.html"><b>สารบัญทั้งหมด</b></a>
+    </div>
+    <h1>การนำกล้องเข้าระบบ (Camera Onboarding)</h1>
+    <p class="masthead__sub">เอกสารนี้เป็นงาน <strong>เทคนิคการต่อกล้อง</strong> ส่วนการเลือกตำแหน่งและตั้งค่ากล้องให้ได้ภาพดี อยู่ที่ <a href="10-chokepoint-design.html"><code>10-chokepoint-design.md</code></a> — <strong>อ่านเล่มนั้นก่อน</strong></p>
+  </header>
+  <nav class="toc" aria-label="สารบัญ">
+    <div class="toc__label">สารบัญ</div>
+    <ol>
+      <li><a href="#1-หลักการ-ต่อตรงเข้ากล้อง-ไม่ดึงผ่าน-nvr">1. หลักการ: ต่อตรงเข้ากล้อง ไม่ดึงผ่าน NVR</a></li>
+      <li><a href="#2-รูปแบบ-rtsp-url">2. รูปแบบ RTSP URL</a></li>
+      <li><a href="#3-กับดักที่พบบ่อยกับกล้องจีน">3. กับดักที่พบบ่อยกับกล้องจีน</a></li>
+      <li><a href="#4-ขั้นตอนการนำกล้องเข้าระบบ">4. ขั้นตอนการนำกล้องเข้าระบบ</a></li>
+      <li><a href="#5-การตั้งค่าใน-frigate">5. การตั้งค่าใน Frigate</a></li>
+      <li><a href="#6-เช็กลิสต์ก่อนถือว่ากล้องพร้อมใช้">6. เช็กลิสต์ก่อนถือว่ากล้องพร้อมใช้</a></li>
+      <li><a href="#เอกสารที่เกี่ยวข้อง">เอกสารที่เกี่ยวข้อง</a></li>
+    </ol>
+  </nav>
+  <main class="main">
+<hr />
+<h2 id="1-หลักการ-ต่อตรงเข้ากล้อง-ไม่ดึงผ่าน-nvr">1. หลักการ: ต่อตรงเข้ากล้อง ไม่ดึงผ่าน NVR</h2>
+<div class="tw"><table>
+<thead>
+<tr>
+<th></th>
+<th>ต่อตรงเข้ากล้อง</th>
+<th>ดึงผ่าน NVR</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>คุณภาพภาพ</td>
+<td>เต็ม</td>
+<td>อาจถูก re-encode</td>
+</tr>
+<tr>
+<td>Latency</td>
+<td>ต่ำ</td>
+<td>สูงกว่า</td>
+</tr>
+<tr>
+<td>ภาระ NVR</td>
+<td>ไม่มี</td>
+<td>เพิ่ม</td>
+</tr>
+<tr>
+<td>ข้อจำกัด session</td>
+<td>ของกล้อง</td>
+<td>NVR จำกัดมากกว่า</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>→ ต่อตรงเข้ากล้องเสมอ</strong> และปล่อยให้ NVR ทำหน้าที่บันทึกของมันไป</p>
+<h3 id="1-1-ระวังจำนวน-rtsp-session">1.1 <span class="star">★</span> ระวังจำนวน RTSP session</h3>
+<pre><code>NVR ดึง mainstream    →  1 session
+Frigate ดึง substream →  1 session
+แอปมือถือ/SmartPSS    →  1 session (บางครั้ง)
+                         ─────────
+                         2–3 session ต่อกล้อง
+</code></pre>
+<p><strong>กล้องจีนราคาประหยัดบางรุ่นรองรับแค่ 2–3 session</strong> เมื่อเต็มแล้วจะปฏิเสธการเชื่อมต่อใหม่ หรือแย่กว่านั้นคือ <strong>ตัดของเดิมทิ้ง</strong> ทำให้ NVR หยุดบันทึกโดยไม่มีใครรู้</p>
+<p><strong>→ ต้องทดสอบข้อนี้ตอนสำรวจ ไม่ใช่ตอนติดตั้งจริง</strong> (วิธีทดสอบอยู่ในหัวข้อ 4.3)</p>
+<hr />
+<h2 id="2-รูปแบบ-rtsp-url">2. รูปแบบ RTSP URL</h2>
+<h3 id="2-1-dahua-และ-oem-เช่น-imou-lorex">2.1 Dahua (และ OEM เช่น Imou, Lorex)</h3>
+<pre><code>rtsp://user:pass@&lt;ip&gt;:554/cam/realmonitor?channel=1&amp;subtype=0   ← mainstream
+rtsp://user:pass@&lt;ip&gt;:554/cam/realmonitor?channel=1&amp;subtype=1   ← substream
+</code></pre>
+<ul>
+<li><code>channel=1</code> เสมอเมื่อต่อตรงเข้ากล้อง (ใช้เลขช่องอื่นเฉพาะตอนต่อผ่าน NVR)</li>
+<li>บางรุ่นมี <code>subtype=2</code> เป็น substream ตัวที่สอง</li>
+</ul>
+<h3 id="2-2-hikvision-และ-oem-เช่น-hilook">2.2 Hikvision (และ OEM เช่น HiLook)</h3>
+<pre><code>rtsp://user:pass@&lt;ip&gt;:554/Streaming/Channels/101    ← mainstream
+rtsp://user:pass@&lt;ip&gt;:554/Streaming/Channels/102    ← substream
+</code></pre>
+<h3 id="2-3-กล้องจีน-onvif-ทั่วไป">2.3 กล้องจีน ONVIF ทั่วไป</h3>
+<p><strong>ไม่มีรูปแบบมาตรฐาน</strong> ต้อง discover ด้วย ONVIF Profile S:</p>
+<pre><code>1. WS-Discovery หาอุปกรณ์ในวง LAN
+2. GetProfiles     → ได้รายการ profile (mainstream/substream)
+3. GetStreamUri    → ได้ RTSP URL จริงของแต่ละ profile
+</code></pre>
+<p>สคริปต์ <code>scripts/probe_cameras.py</code> จะทำขั้นตอนนี้ให้อัตโนมัติ</p>
+<p>รูปแบบที่พบบ่อยในกล้องจีน (ลองไล่ดูถ้า ONVIF ใช้ไม่ได้):</p>
+<pre><code>rtsp://user:pass@&lt;ip&gt;:554/stream1
+rtsp://user:pass@&lt;ip&gt;:554/live/ch0
+rtsp://user:pass@&lt;ip&gt;:554/h264/ch1/main/av_stream
+rtsp://user:pass@&lt;ip&gt;:554/user=admin_password=xxx_channel=1_stream=0.sdp
+</code></pre>
+<h3 id="2-4-url-encode-รหัสผ่านที่มีอักขระพิเศษ">2.4 <span class="star">★</span> URL-encode รหัสผ่านที่มีอักขระพิเศษ</h3>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>อักขระ</th>
+<th>ต้องเขียนเป็น</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>@</code></td>
+<td><code>%40</code></td>
+</tr>
+<tr>
+<td><code>:</code></td>
+<td><code>%3A</code></td>
+</tr>
+<tr>
+<td><code>/</code></td>
+<td><code>%2F</code></td>
+</tr>
+<tr>
+<td><code>#</code></td>
+<td><code>%23</code></td>
+</tr>
+<tr>
+<td><code>?</code></td>
+<td><code>%3F</code></td>
+</tr>
+<tr>
+<td><code>&amp;</code></td>
+<td><code>%26</code></td>
+</tr>
+<tr>
+<td>ช่องว่าง</td>
+<td><code>%20</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>ตัวอย่าง: รหัสผ่าน <code>P@ss/w0rd</code> → <code>rtsp://admin:P%40ss%2Fw0rd@192.168.1.50:554/...</code></p>
+<blockquote>
+<p><strong>นี่คือสาเหตุอันดับหนึ่งของ &quot;ต่อกล้องไม่ได้ทั้งที่รหัสผ่านถูก&quot;</strong></p>
+</blockquote>
+<hr />
+<h2 id="3-กับดักที่พบบ่อยกับกล้องจีน">3. กับดักที่พบบ่อยกับกล้องจีน</h2>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>ปัญหา</th>
+<th>อาการ</th>
+<th>วิธีแก้</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>ไม่มี substream</strong></td>
+<td>probe เจอแค่ 1 profile</td>
+<td>ใช้ mainstream แล้วให้ Frigate ย่อภาพ (กิน CPU มากขึ้น) หรือเปลี่ยนกล้อง</td>
+</tr>
+<tr>
+<td><strong>substream เล็กเกินไป</strong></td>
+<td>352×288 หรือ 640×360</td>
+<td>detect ไม่แม่น — ตั้ง substream ใหม่ในกล้องให้เป็น 640×480 ขึ้นไป</td>
+</tr>
+<tr>
+<td><strong>UDP หลุดบ่อย</strong></td>
+<td>ภาพแตก เขียว กระตุก</td>
+<td><strong>บังคับ <code>rtsp_transport: tcp</code></strong> ใน Frigate</td>
+</tr>
+<tr>
+<td><strong>fps ที่รายงานไม่ตรงจริง</strong></td>
+<td>Frigate เตือน fps mismatch</td>
+<td>วัดจริงด้วย <code>ffprobe</code> แล้วตั้งตามค่าที่วัดได้</td>
+</tr>
+<tr>
+<td><strong>track เสียงทำ ffmpeg พัง</strong></td>
+<td>ffmpeg ตายเป็นระยะ</td>
+<td>เพิ่ม <code>-an</code> ใน input args</td>
+</tr>
+<tr>
+<td><strong>timestamp drift</strong></td>
+<td>คลิปยาวผิดปกติ เวลาเพี้ยน</td>
+<td>ให้ go2rtc restream เป็นตัวกลาง</td>
+</tr>
+<tr>
+<td><strong>กล้องรีบูตเองเป็นระยะ</strong></td>
+<td>RTSP หลุดตามรอบเวลา</td>
+<td>ปิด auto-reboot ในกล้อง หรือตั้งให้รีบูตตอนตี 3</td>
+</tr>
+<tr>
+<td><strong>สิทธิ์บัญชีไม่พอ</strong></td>
+<td>ต่อได้แต่ไม่มีภาพ</td>
+<td>สร้าง user ระดับ admin เฉพาะสำหรับ Frigate</td>
+</tr>
+<tr>
+<td><strong>H.265 บน substream</strong></td>
+<td>decode กินซีพียูมากกว่าที่ควร</td>
+<td>ตั้ง substream เป็น <strong>H.264</strong></td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<h2 id="4-ขั้นตอนการนำกล้องเข้าระบบ">4. ขั้นตอนการนำกล้องเข้าระบบ</h2>
+<h3 id="4-1-สำรวจด้วยสคริปต์">4.1 สำรวจด้วยสคริปต์</h3>
+<pre><code class="language-bash">python scripts/probe_cameras.py --subnet 192.168.1.0/24
+</code></pre>
+<p><strong>สิ่งที่สคริปต์ต้องรายงาน</strong> (จะเขียนในเฟส 2):</p>
+<pre><code>IP              ยี่ห้อ      Profile      ความละเอียด  fps  codec  สถานะ
+──────────────────────────────────────────────────────────────────────
+192.168.1.51    Dahua      main         2560x1440    25   H.265  OK
+192.168.1.51    Dahua      sub          704x576      15   H.264  OK
+192.168.1.52    ONVIF จีน   main         1920x1080    20   H.264  OK
+192.168.1.52    ONVIF จีน   (ไม่มี sub)                          <span class="star">★</span> เตือน
+192.168.1.53    Dahua      main         1920x1080    25   H.264  OK
+192.168.1.53    Dahua      sub          640x480      10   H.264  OK
+──────────────────────────────────────────────────────────────────────
+พบ 3 กล้อง · เตือน 1 รายการ
+</code></pre>
+<h3 id="4-2-ทดสอบด้วยมือ">4.2 ทดสอบด้วยมือ</h3>
+<pre><code class="language-bash">ffprobe -rtsp_transport tcp -i &quot;rtsp://user:pass@192.168.1.51:554/cam/realmonitor?channel=1&amp;subtype=1&quot;
+</code></pre>
+<p>ตรวจว่าได้ค่าตรงกับที่ตั้งไว้ในกล้อง โดยเฉพาะ <strong>fps จริง</strong></p>
+<h3 id="4-3-ทดสอบจำนวน-rtsp-session">4.3 <span class="star">★</span> ทดสอบจำนวน RTSP session</h3>
+<p>เปิดหลายหน้าต่างพร้อมกันขณะที่ NVR ยังทำงานอยู่:</p>
+<pre><code class="language-bash">ffplay -rtsp_transport tcp -i &quot;rtsp://user:pass@192.168.1.51:554/cam/realmonitor?channel=1&amp;subtype=1&quot;
+</code></pre>
+<p><strong>ต้องเปิดได้อย่างน้อย 2 ตัวพร้อมกัน</strong> โดยที่ NVR ไม่หลุด
+ถ้าเปิดตัวที่ 2 แล้ว NVR หยุดบันทึก → <strong>กล้องตัวนี้ใช้ไม่ได้ ต้องเปลี่ยน</strong></p>
+<h3 id="4-4-ทดสอบความเสถียร-24-ชั่วโมง">4.4 ทดสอบความเสถียร 24 ชั่วโมง</h3>
+<pre><code class="language-bash">ffmpeg -rtsp_transport tcp -i &quot;rtsp://...&quot; -f null - 2&gt;&amp;1 | tee /tmp/rtsp-test.log
+</code></pre>
+<p>ปล่อยทิ้งไว้ 24 ชม. แล้วตรวจ log ว่ามี error หรือ reconnect กี่ครั้ง
+<strong>หลุดเกิน 2–3 ครั้งต่อวัน = มีปัญหา</strong> ตรวจสายและ transport</p>
+<h3 id="4-5-เพิ่มเข้า-frigate">4.5 เพิ่มเข้า Frigate</h3>
+<p>แก้ <code>frigate/config.yml</code> (ดูเทมเพลตในไฟล์นั้น) แล้ว:</p>
+<pre><code class="language-bash">docker compose restart frigate
+</code></pre>
+<p>ตรวจ log:</p>
+<pre><code class="language-bash">docker compose logs -f frigate --tail=50
+</code></pre>
+<h3 id="4-6-บันทึกลงฐานข้อมูล">4.6 บันทึกลงฐานข้อมูล</h3>
+<p>เพิ่มแถวใน <code>cameras</code> พร้อมข้อมูลที่ขาดไม่ได้:</p>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>คอลัมน์</th>
+<th>ต้องกรอก</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>id</code></td>
+<td><code>&lt;SITE_ID&gt;-&lt;จุด&gt;-&lt;บทบาท&gt;</code> เช่น <code>WH01-GATE-LPR</code></td>
+</tr>
+<tr>
+<td><code>nvr_channel</code></td>
+<td><span class="star">★</span> ช่องใน NVR — <strong>ถ้าไม่มี ผลการค้นหาจะใช้ไม่ได้</strong></td>
+</tr>
+<tr>
+<td><code>tier</code> / <code>role</code></td>
+<td>กำหนดว่า indexer จะรันโมเดลอะไร</td>
+</tr>
+<tr>
+<td><code>clock_offset_ms</code></td>
+<td>0 ถ้า NTP ปกติ</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="4-7-ตรวจการซิงก์เวลา">4.7 ตรวจการซิงก์เวลา</h3>
+<pre><code class="language-bash">python scripts/check_time_sync.py
+</code></pre>
+<p>ต้องต่างกัน &lt; 2 วินาที (ดู <a href="08-nvr-integration.html"><code>08-nvr-integration.md</code></a>)</p>
+<hr />
+<h2 id="5-การตั้งค่าใน-frigate">5. การตั้งค่าใน Frigate</h2>
+<h3 id="5-1-หลักการ-substream-สำหรับ-detect-mainstream-สำหรับ-record">5.1 หลักการ: substream สำหรับ detect, mainstream สำหรับ record</h3>
+<pre><code class="language-yaml">cameras:
+  WH01-GATE-LPR:
+    ffmpeg:
+      inputs:
+        # substream: เล็ก เร็ว ใช้ตรวจจับ
+        - path: rtsp://...&amp;subtype=1
+          roles: [detect]
+        # mainstream: คมชัด ใช้บันทึกเฉพาะตอนมีเหตุการณ์
+        - path: rtsp://...&amp;subtype=0
+          roles: [record]
+</code></pre>
+<p><strong>ทำไมต้องแยก:</strong> detect ที่ความละเอียดต่ำเร็วกว่ามากและแม่นพอ ๆ กัน ส่วนคลิปที่บันทึกต้องคมพอให้คนดูยืนยันได้</p>
+<h3 id="5-2-hardware-acceleration-สำหรับ-intel">5.2 Hardware acceleration สำหรับ Intel</h3>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>รุ่น CPU</th>
+<th>preset</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Gen 1–7</td>
+<td><code>preset-vaapi</code></td>
+</tr>
+<tr>
+<td>Gen 8–12</td>
+<td><code>preset-vaapi</code> หรือ <code>preset-intel-qsv-h264</code></td>
+</tr>
+<tr>
+<td>Gen 13+ / Core Ultra / N100</td>
+<td><code>preset-intel-qsv-h264</code></td>
+</tr>
+</tbody>
+</table></div>
+<p>ตรวจว่าใช้ iGPU จริง:</p>
+<pre><code class="language-bash">docker compose exec frigate intel_gpu_top
+</code></pre>
+<p>ถ้าค่า Video/Render เป็น 0 ตลอด แปลว่ายังใช้ CPU decode อยู่</p>
+<h3 id="5-3-ค่าที่แนะนำสำหรับกล้องจีน">5.3 ค่าที่แนะนำสำหรับกล้องจีน</h3>
+<pre><code class="language-yaml">ffmpeg:
+  input_args: preset-rtsp-restream
+  # หรือถ้ามีปัญหา ใช้ค่านี้แทน
+  # input_args: -avoid_negative_ts make_zero -fflags +genpts+discardcorrupt
+  #             -rtsp_transport tcp -timeout 5000000 -use_wallclock_as_timestamps 1 -an
+</code></pre>
+<p><code>-an</code> ตัดเสียงออก แก้ปัญหา ffmpeg พังจาก track เสียงเสีย</p>
+<hr />
+<h2 id="6-เช็กลิสต์ก่อนถือว่ากล้องพร้อมใช้">6. เช็กลิสต์ก่อนถือว่ากล้องพร้อมใช้</h2>
+<ul>
+<li class="chk"><label><input type="checkbox"><span><code>probe_cameras.py</code> รายงาน OK มี substream</span></label></li>
+<li class="chk"><label><input type="checkbox"><span><code>ffprobe</code> ได้ค่า fps/codec ตรงกับที่ตั้งในกล้อง</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>เปิด RTSP พร้อมกัน 2 session ได้โดย NVR ไม่หลุด</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ทดสอบ 24 ชม. หลุดไม่เกิน 2 ครั้ง</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>Frigate แสดงภาพสดได้ ไม่มี error ใน log</span></label></li>
+<li class="chk"><label><input type="checkbox"><span><code>intel_gpu_top</code> ยืนยันว่า decode ผ่าน iGPU</span></label></li>
+<li class="chk"><label><input type="checkbox"><span><code>skipped_fps</code> = 0 ใน <code>/api/stats</code></span></label></li>
+<li class="chk"><label><input type="checkbox"><span>เพิ่มแถวใน <code>cameras</code> ครบ <strong>โดยเฉพาะ <code>nvr_channel</code></strong></span></label></li>
+<li class="chk"><label><input type="checkbox"><span><code>check_time_sync.py</code> ผ่าน (&lt; 2 วินาที)</span></label></li>
+<li class="chk"><label><input type="checkbox"><span><strong>คุณภาพภาพผ่านเกณฑ์ใน <a href="10-chokepoint-design.html"><code>10-chokepoint-design.md</code></a> หัวข้อ 7</strong> (สำคัญที่สุด)</span></label></li>
+</ul>
+<hr />
+<h2 id="เอกสารที่เกี่ยวข้อง">เอกสารที่เกี่ยวข้อง</h2>
+<ul>
+<li><a href="10-chokepoint-design.html"><code>10-chokepoint-design.md</code></a> — ตำแหน่งและการตั้งค่ากล้องให้ได้ภาพดี</li>
+<li><a href="08-nvr-integration.html"><code>08-nvr-integration.md</code></a> — การซิงก์เวลา</li>
+<li><a href="09-multi-site-runbook.html"><code>09-multi-site-runbook.md</code></a> — ขั้นตอนเปิดไซต์ใหม่ทั้งกระบวนการ</li>
+</ul>
+
+<button class="checks-reset" type="button">ล้างเครื่องหมายทั้งหมด</button>
+
+  </main>
+</div>
+<script>
+(function () {
+  "use strict";
+  var KEY = "docs-checks-" + (document.body.getAttribute("data-doc") || "x");
+  var boxes = Array.prototype.slice.call(document.querySelectorAll("li.chk input"));
+  var saved = {};
+  try { saved = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { saved = {}; }
+  boxes.forEach(function (box, i) {
+    if (saved[i]) box.checked = true;
+    box.addEventListener("change", function () {
+      saved[i] = box.checked;
+      try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch (e) {}
+    });
+  });
+  var reset = document.querySelector(".checks-reset");
+  if (reset) reset.addEventListener("click", function () {
+    boxes.forEach(function (b) { b.checked = false; });
+    saved = {};
+    try { localStorage.removeItem(KEY); } catch (e) {}
+  });
+
+  var links = {};
+  Array.prototype.forEach.call(document.querySelectorAll(".toc a"), function (a) {
+    links[a.getAttribute("href").slice(1)] = a;
+  });
+  var heads = document.querySelectorAll(".main h2");
+  if (!heads.length || !window.IntersectionObserver) return;
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      var link = links[e.target.id];
+      if (!link || !e.isIntersecting) return;
+      Object.keys(links).forEach(function (k) { links[k].classList.remove("is-active"); });
+      link.classList.add("is-active");
+    });
+  }, { rootMargin: "-8% 0px -80% 0px" });
+  Array.prototype.forEach.call(heads, function (h) { io.observe(h); });
+})();
+</script>
+</body>
+</html>

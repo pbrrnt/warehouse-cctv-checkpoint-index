@@ -1,0 +1,623 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>04 — โครงสร้างฐานข้อมูล — ระบบดัชนีสืบค้นภาพ</title>
+<style>
+:root {
+  --ground:#F5F4F2; --surface:#FFFFFF; --surface-2:#EEECE8;
+  --ink:#191714; --ink-2:#57524B; --ink-3:#8A837A;
+  --rule:#DEDAD4; --rule-strong:#C4BEB5;
+  --accent:#A66A00; --accent-ink:#7A4E00; --accent-wash:#F8F0DE;
+  --pass:#216B45; --pass-wash:#E4F0E9; --fail:#A32219; --fail-wash:#F8E6E4;
+  --shadow:0 1px 2px rgba(25,23,20,.05), 0 8px 24px -16px rgba(25,23,20,.28);
+  --font-th:"Leelawadee UI","Noto Sans Thai","Thonburi","Sarabun","Segoe UI",Tahoma,system-ui,sans-serif;
+  --font-mono:ui-monospace,"SF Mono","Cascadia Mono","Segoe UI Mono","Roboto Mono",Menlo,Consolas,monospace;
+  --measure:70ch; --rail:16rem;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground:#141210; --surface:#1C1917; --surface-2:#24201C;
+    --ink:#EFEAE2; --ink-2:#ADA49A; --ink-3:#7C736A;
+    --rule:#332D27; --rule-strong:#4A423A;
+    --accent:#E0A648; --accent-ink:#EFC077; --accent-wash:#2C2313;
+    --pass:#5FBF8C; --pass-wash:#16301F; --fail:#E5796C; --fail-wash:#331A17;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"] {
+  --ground:#141210; --surface:#1C1917; --surface-2:#24201C;
+  --ink:#EFEAE2; --ink-2:#ADA49A; --ink-3:#7C736A;
+  --rule:#332D27; --rule-strong:#4A423A;
+  --accent:#E0A648; --accent-ink:#EFC077; --accent-wash:#2C2313;
+  --pass:#5FBF8C; --pass-wash:#16301F; --fail:#E5796C; --fail-wash:#331A17;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+}
+:root[data-theme="light"] {
+  --ground:#F5F4F2; --surface:#FFFFFF; --surface-2:#EEECE8;
+  --ink:#191714; --ink-2:#57524B; --ink-3:#8A837A;
+  --rule:#DEDAD4; --rule-strong:#C4BEB5;
+  --accent:#A66A00; --accent-ink:#7A4E00; --accent-wash:#F8F0DE;
+  --pass:#216B45; --pass-wash:#E4F0E9; --fail:#A32219; --fail-wash:#F8E6E4;
+  --shadow:0 1px 2px rgba(25,23,20,.05), 0 8px 24px -16px rgba(25,23,20,.28);
+}
+
+* { box-sizing:border-box; }
+body {
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:var(--font-th); font-size:16.5px; line-height:1.85;
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+}
+:where(a){ color:var(--accent-ink); text-decoration-color:color-mix(in srgb, var(--accent) 40%, transparent); text-underline-offset:.22em; }
+:where(a):hover{ text-decoration-color:var(--accent); }
+:where(a,button,input,summary):focus-visible{ outline:2px solid var(--accent); outline-offset:3px; border-radius:3px; }
+
+.page{ display:grid; grid-template-columns:var(--rail) minmax(0,1fr); gap:3.5rem;
+       max-width:78rem; margin:0 auto; padding:0 2rem 6rem; align-items:start; }
+.main{ min-width:0; max-width:var(--measure); }
+@media (max-width:60rem){ .page{ grid-template-columns:minmax(0,1fr); gap:0; padding:0 1.15rem 4rem; } .main{ max-width:none; } }
+
+.masthead{ grid-column:1/-1; border-bottom:1px solid var(--rule);
+           padding:3.5rem 0 2rem; margin-bottom:2.5rem; display:flex; flex-direction:column; gap:.9rem; }
+.masthead__kicker{ font-family:var(--font-mono); font-size:.72rem; letter-spacing:.14em;
+                   text-transform:uppercase; color:var(--ink-3); display:flex; flex-wrap:wrap; gap:.55rem .9rem; align-items:center; }
+.masthead__kicker b{ color:var(--accent-ink); font-weight:600; }
+.masthead__kicker a{ color:var(--ink-3); text-decoration:none; }
+.masthead__kicker a:hover{ color:var(--accent-ink); }
+.masthead h1{ margin:0; font-size:clamp(1.8rem,1.2rem + 2.2vw,2.5rem); line-height:1.35;
+              font-weight:700; letter-spacing:-.005em; text-wrap:balance; }
+.masthead__sub{ margin:0; max-width:56ch; color:var(--ink-2); font-size:1.02rem; }
+
+.toc{ position:sticky; top:2rem; font-size:.875rem; line-height:1.6;
+      border-left:1px solid var(--rule); padding-left:1.1rem; }
+.toc__label{ font-family:var(--font-mono); font-size:.68rem; letter-spacing:.14em;
+             text-transform:uppercase; color:var(--ink-3); margin-bottom:.85rem; }
+.toc ol{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:.1rem; }
+.toc li{ margin:0; }
+.toc a{ display:block; padding:.3rem 0; color:var(--ink-2); text-decoration:none; border-radius:2px; }
+.toc a:hover{ color:var(--ink); }
+.toc a.is-active{ color:var(--accent-ink); font-weight:600; }
+@media (max-width:60rem){
+  .toc{ position:static; border-left:0; border:1px solid var(--rule); border-radius:3px;
+        background:var(--surface); padding:1rem 1.1rem; margin-bottom:2.5rem; }
+  .toc ol{ columns:2; column-gap:1.5rem; }
+  .toc li{ break-inside:avoid; }
+}
+
+h2{ margin:3.4rem 0 1.5rem; padding-bottom:.55rem; border-bottom:2px solid var(--ink);
+    font-size:clamp(1.25rem,1.1rem + .7vw,1.5rem); line-height:1.4; font-weight:700;
+    text-wrap:balance; scroll-margin-top:1.5rem; }
+.main > h2:first-child{ margin-top:0; }
+h3{ margin:2.6rem 0 .9rem; font-size:1.06rem; font-weight:700; line-height:1.5; scroll-margin-top:1.5rem; }
+h4{ margin:1.9rem 0 .6rem; font-size:.95rem; font-weight:700; color:var(--ink-2); }
+p{ margin:0 0 1rem; }
+strong{ font-weight:700; }
+ul,ol{ margin:0 0 1.1rem; padding-left:1.35rem; }
+li{ margin-bottom:.4rem; }
+li:last-child{ margin-bottom:0; }
+li > ul, li > ol { margin-top:.4rem; }
+hr{ border:0; border-top:1px solid var(--rule); margin:2.5rem 0; }
+
+/* ★ ในต้นฉบับ = ระดับความสำคัญ */
+.star{ color:var(--accent); font-size:.9em; }
+
+blockquote{ margin:1.4rem 0; padding:.1rem 0 .1rem 1.1rem;
+            border-left:3px solid var(--rule-strong); color:var(--ink-2); font-size:.96rem; }
+blockquote strong{ color:var(--ink); }
+blockquote > :last-child{ margin-bottom:0; }
+/* blockquote ที่ขึ้นต้นด้วย ★ = คำเตือนสำคัญ */
+blockquote.is-flag{ background:var(--surface); border:1px solid var(--rule);
+                    border-left:4px solid var(--accent); border-radius:2px;
+                    padding:1.05rem 1.25rem; box-shadow:var(--shadow); color:var(--ink); }
+
+.tw{ overflow-x:auto; margin:1.4rem 0; border:1px solid var(--rule); border-radius:3px;
+     background:var(--surface); -webkit-overflow-scrolling:touch; }
+table{ border-collapse:collapse; width:100%; font-size:.93rem; line-height:1.65;
+       font-variant-numeric:tabular-nums; }
+thead th{ background:var(--surface-2); text-align:left; font-weight:700; font-size:.8rem;
+          color:var(--ink-2); padding:.6rem .85rem; border-bottom:1px solid var(--rule-strong); white-space:nowrap; }
+td{ padding:.62rem .85rem; border-bottom:1px solid var(--rule); vertical-align:top; text-align:left; }
+tbody tr:last-child td{ border-bottom:0; }
+td:empty{ min-width:4rem; }
+
+code{ font-family:var(--font-mono); font-size:.875em; background:var(--surface-2);
+      padding:.1em .38em; border-radius:2px; }
+pre{ font-family:var(--font-mono); font-size:.85rem; line-height:1.7; background:var(--surface);
+     border:1px solid var(--rule); border-radius:3px; padding:1rem 1.15rem; margin:1.3rem 0;
+     overflow-x:auto; color:var(--ink); font-variant-numeric:tabular-nums; }
+pre code{ background:none; padding:0; font-size:1em; white-space:pre; }
+
+/* เช็กลิสต์ติ๊กได้ จำสถานะไว้ — ใช้ li.chk เพื่อรองรับรายการซ้อนชั้น */
+ul:has(> li.chk){ list-style:none; margin:1.1rem 0 1.5rem; padding:0; }
+li.chk > ul{ margin:.3rem 0 .5rem 1.8rem; }
+li.chk{ margin:0; }
+li.chk > label{ display:flex; gap:.7rem; align-items:flex-start; padding:.5rem .7rem;
+                border-radius:3px; cursor:pointer; transition:background .12s ease; }
+li.chk > label:hover{ background:var(--surface-2); }
+li.chk input{ appearance:none; flex:0 0 auto; width:1.05rem; height:1.05rem; margin:.38rem 0 0;
+              border:1.5px solid var(--rule-strong); border-radius:2px; background:var(--surface);
+              cursor:pointer; position:relative; }
+li.chk input:checked{ background:var(--pass); border-color:var(--pass); }
+li.chk input:checked::after{ content:""; position:absolute; left:5px; top:1px; width:4px; height:9px;
+                             border:solid var(--surface); border-width:0 2px 2px 0; transform:rotate(42deg); }
+li.chk input:checked + span{ color:var(--ink-3); text-decoration:line-through; text-decoration-thickness:1px; }
+li.chk > label > span{ flex:1; }
+.checks-reset{ font-family:var(--font-mono); font-size:.72rem; letter-spacing:.06em; background:none;
+               border:1px solid var(--rule); border-radius:2px; color:var(--ink-3);
+               padding:.3rem .65rem; cursor:pointer; margin:.4rem 0 1.5rem; display:inline-block; }
+.checks-reset:hover{ color:var(--ink); border-color:var(--rule-strong); }
+
+/* หน้า index */
+.cards{ list-style:none; padding:0; margin:0; display:grid; gap:.65rem; }
+.cards li{ margin:0; }
+.cards a{ display:flex; gap:1rem; align-items:baseline; text-decoration:none; color:inherit;
+          background:var(--surface); border:1px solid var(--rule); border-radius:3px;
+          padding:.9rem 1.1rem; transition:border-color .12s ease, transform .12s ease; }
+.cards a:hover{ border-color:var(--accent); transform:translateX(2px); }
+.cards .n{ font-family:var(--font-mono); font-size:.85rem; color:var(--ink-3); font-variant-numeric:tabular-nums; }
+.cards .t{ font-weight:700; display:block; margin-bottom:.1rem; }
+.cards .d{ color:var(--ink-2); font-size:.92rem; display:block; line-height:1.6; }
+.cards .is-key .t{ color:var(--accent-ink); }
+.cards a.is-key{ border-left:3px solid var(--accent); }
+
+@media print{
+  :root{ --ground:#fff; --surface:#fff; --surface-2:#f2f2f2; --ink:#000; --ink-2:#333; --ink-3:#666;
+         --rule:#bbb; --rule-strong:#888; --accent:#000; --accent-ink:#000; --accent-wash:#f4f4f4; --shadow:none; }
+  body{ font-size:10.5pt; line-height:1.65; }
+  .toc,.checks-reset{ display:none; }
+  .page{ display:block; max-width:none; padding:0; }
+  h2,h3,h4{ page-break-after:avoid; }
+  .tw,pre,blockquote{ page-break-inside:avoid; }
+  a{ text-decoration:none; color:#000; }
+}
+@media (prefers-reduced-motion: reduce){ *{ animation:none !important; transition:none !important; scroll-behavior:auto !important; } }
+html{ scroll-behavior:smooth; }
+</style>
+</head>
+<body data-doc="04-data-model">
+<div class="page">
+  <header class="masthead">
+    <div class="masthead__kicker">
+      <span>เอกสาร 04</span><span>·</span><span>ระบบดัชนีสืบค้นภาพจากกล้องวงจรปิด</span><span>·</span><a href="index.html"><b>สารบัญทั้งหมด</b></a>
+    </div>
+    <h1>โครงสร้างฐานข้อมูล</h1>
+    <p class="masthead__sub">PostgreSQL 16+ พร้อมส่วนขยาย <code>pgvector</code> และ <code>pg_trgm</code> จัดการ schema ด้วย Alembic ที่ <code>db/migrations/</code></p>
+  </header>
+  <nav class="toc" aria-label="สารบัญ">
+    <div class="toc__label">สารบัญ</div>
+    <ol>
+      <li><a href="#1-ส่วนขยายที่ต้องเปิด">1. ส่วนขยายที่ต้องเปิด</a></li>
+      <li><a href="#2-ตาราง">2. ตาราง</a></li>
+      <li><a href="#3-index-และเหตุผล">3. ★ Index และเหตุผล</a></li>
+      <li><a href="#4-คิวรีตัวอย่าง">4. คิวรีตัวอย่าง</a></li>
+      <li><a href="#5-retention-และการลบข้อมูล">5. Retention และการลบข้อมูล</a></li>
+      <li><a href="#6-หลักการที่ยึดในการออกแบบ-schema">6. หลักการที่ยึดในการออกแบบ schema</a></li>
+      <li><a href="#เอกสารที่เกี่ยวข้อง">เอกสารที่เกี่ยวข้อง</a></li>
+    </ol>
+  </nav>
+  <main class="main">
+<hr />
+<h2 id="1-ส่วนขยายที่ต้องเปิด">1. ส่วนขยายที่ต้องเปิด</h2>
+<pre><code class="language-sql">CREATE EXTENSION IF NOT EXISTS vector;      -- pgvector: เก็บและค้น embedding
+CREATE EXTENSION IF NOT EXISTS pg_trgm;     -- trigram: ค้นทะเบียนแบบ fuzzy
+CREATE EXTENSION IF NOT EXISTS btree_gin;   -- index ผสมระหว่าง btree กับ gin
+</code></pre>
+<hr />
+<h2 id="2-ตาราง">2. ตาราง</h2>
+<h3 id="2-1-sites-ไซต์-โกดัง">2.1 <code>sites</code> — ไซต์ (โกดัง)</h3>
+<pre><code class="language-sql">CREATE TABLE sites (
+    id          TEXT PRIMARY KEY,               -- 'WH01'
+    name        TEXT NOT NULL,                  -- 'โกดังบางนา'
+    timezone    TEXT NOT NULL DEFAULT 'Asia/Bangkok',
+    nvr_host    TEXT,                           -- IP ของ NVR
+    nvr_vendor  TEXT,                           -- 'dahua' | 'hikvision' | 'onvif'
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+</code></pre>
+<blockquote>
+<p><strong>มีตารางนี้ตั้งแต่วันแรกแม้จะมีไซต์เดียว</strong> — เพิ่มทีหลังต้องแก้ทุกคิวรีในระบบ</p>
+</blockquote>
+<h3 id="2-2-cameras-กล้อง">2.2 <code>cameras</code> — กล้อง</h3>
+<pre><code class="language-sql">CREATE TYPE camera_role AS ENUM ('lpr', 'overview', 'face', 'context');
+
+CREATE TABLE cameras (
+    id              TEXT PRIMARY KEY,           -- 'WH01-GATE-LPR'
+    site_id         TEXT NOT NULL REFERENCES sites(id),
+    name            TEXT NOT NULL,              -- 'ประตูใหญ่ - อ่านป้าย'
+    tier            CHAR(1) NOT NULL,           -- 'A' | 'B' | 'C'
+    role            camera_role,
+    location        TEXT,
+    vendor          TEXT,
+    nvr_channel     INT,                        -- <span class="star">★</span> ช่องใน NVR
+    rtsp_profile    JSONB,                      -- ข้อมูลจาก probe_cameras.py
+    clock_offset_ms INT NOT NULL DEFAULT 0,     -- <span class="star">★</span> ชดเชยเวลากล้องที่เพี้ยน
+    zone_config     JSONB,                      -- โซนตรวจทิศทางเข้า/ออก
+    enabled         BOOLEAN NOT NULL DEFAULT true
+);
+</code></pre>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>คอลัมน์สำคัญ</th>
+<th>ทำไมต้องมี</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>nvr_channel</code></td>
+<td>ถ้าไม่รู้ว่ากล้องนี้คือช่องไหนใน NVR เจ้าหน้าที่ไปเปิดต่อไม่ได้ → ผลการค้นหาไร้ประโยชน์</td>
+</tr>
+<tr>
+<td><code>clock_offset_ms</code></td>
+<td>กล้องบางรุ่นตั้ง NTP ไม่ได้ ต้องชดเชยตอนแสดงผล (ดู <a href="08-nvr-integration.html"><code>08-nvr-integration.md</code></a>)</td>
+</tr>
+<tr>
+<td><code>tier</code> / <code>role</code></td>
+<td>กำหนดว่า indexer จะรันโมเดลอะไรกับกล้องตัวนี้</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="2-3-events-เหตุการณ์-1-tracked-object-1-แถว">2.3 <code>events</code> — เหตุการณ์ (1 tracked object = 1 แถว)</h3>
+<pre><code class="language-sql">CREATE TYPE event_direction AS ENUM ('in', 'out');
+
+CREATE TABLE events (
+    id           TEXT PRIMARY KEY,              -- ใช้ frigate event id ตรง ๆ
+    site_id      TEXT NOT NULL REFERENCES sites(id),
+    camera_id    TEXT NOT NULL REFERENCES cameras(id),
+    label        TEXT NOT NULL,                 -- 'person' | 'car' | 'motorcycle'
+    sub_label    TEXT,
+    score        REAL,
+    start_ts     TIMESTAMPTZ NOT NULL,          -- <span class="star">★</span> UTC เสมอ
+    end_ts       TIMESTAMPTZ,
+    direction    event_direction,               -- <span class="star">★</span> เข้า/ออก
+    zones        TEXT[],
+    has_clip     BOOLEAN NOT NULL DEFAULT false,
+    thumb_key    TEXT,
+    raw          JSONB,                         -- payload ดิบจาก Frigate
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+</code></pre>
+<p><strong><span class="star">★</span> <code>direction</code></strong> ได้จากทิศทางการเคลื่อนที่ของ track ผ่านโซนที่กำหนดใน Frigate
+ทำให้ตอบคำถามที่มีค่าที่สุดของโกดังได้: <em>&quot;รถคันนี้เข้ากี่โมง ออกกี่โมง อยู่ในโกดังนานเท่าไร ตอนนี้ยังอยู่ข้างในไหม&quot;</em></p>
+<p><strong><span class="star">★</span> <code>raw</code></strong> เก็บ payload ดิบไว้เสมอ — ถ้าภายหลังพบว่าต้องใช้ฟิลด์ที่ไม่ได้ดึงออกมา จะได้ไม่ต้องประมวลผลใหม่</p>
+<h3 id="2-4-detections-สิ่งที่ตรวจพบในเหตุการณ์">2.4 <code>detections</code> — สิ่งที่ตรวจพบในเหตุการณ์</h3>
+<pre><code class="language-sql">CREATE TYPE detection_kind AS ENUM ('face', 'vehicle', 'plate');
+
+CREATE TABLE detections (
+    id          BIGSERIAL PRIMARY KEY,
+    event_id    TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+    kind        detection_kind NOT NULL,
+    ts          TIMESTAMPTZ NOT NULL,
+    bbox        INT[4],                         -- [x1, y1, x2, y2]
+    crop_key    TEXT,                           -- path ใน object store
+    quality     REAL                            -- คะแนนคุณภาพภาพ (blur, ขนาด, มุม)
+);
+</code></pre>
+<p><code>ON DELETE CASCADE</code> ทำให้การลบตาม retention ทำได้ที่ <code>events</code> ที่เดียว</p>
+<h3 id="2-5-ใบหน้า">2.5 ใบหน้า</h3>
+<pre><code class="language-sql">CREATE TABLE persons (
+    id            BIGSERIAL PRIMARY KEY,
+    site_id       TEXT NOT NULL REFERENCES sites(id),
+    display_name  TEXT,                         -- NULL = บุคคลนิรนามจาก clustering
+    notes         TEXT,
+    consent_basis TEXT,                         -- <span class="star">★</span> ฐานทางกฎหมายตาม PDPA
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE face_embeddings (
+    detection_id BIGINT PRIMARY KEY REFERENCES detections(id) ON DELETE CASCADE,
+    embedding    VECTOR(512) NOT NULL,          -- ArcFace
+    person_id    BIGINT REFERENCES persons(id) ON DELETE SET NULL
+);
+</code></pre>
+<blockquote>
+<p><strong><code>consent_basis</code> ไม่ใช่ฟิลด์ประดับ</strong> — เป็นหลักฐานตามกฎหมายว่าเก็บข้อมูลชีวมิติของคนนี้ด้วยฐานอะไร (ดู <a href="06-pdpa-compliance.html"><code>06-pdpa-compliance.md</code></a>)</p>
+</blockquote>
+<h3 id="2-6-ยานพาหนะ">2.6 ยานพาหนะ</h3>
+<pre><code class="language-sql">CREATE TABLE vehicles (
+    detection_id BIGINT PRIMARY KEY REFERENCES detections(id) ON DELETE CASCADE,
+    vehicle_type TEXT,                          -- 'car' | 'van' | 'truck' | 'bus'
+    color        TEXT,                          -- 'white' | 'black' | ...
+    embedding    VECTOR(256),                   -- vehicle-reid-0001
+    plate_id     BIGINT REFERENCES plates(id) ON DELETE SET NULL
+);
+</code></pre>
+<h3 id="2-7-ป้ายทะเบียน">2.7 ป้ายทะเบียน</h3>
+<pre><code class="language-sql">CREATE TABLE plates (
+    id           BIGSERIAL PRIMARY KEY,
+    detection_id BIGINT NOT NULL REFERENCES detections(id) ON DELETE CASCADE,
+    raw_text     TEXT,                          -- <span class="star">★</span> ข้อความดิบจาก OCR (ห้ามทิ้ง)
+    plate_norm   TEXT,                          -- '1กก1234' ไม่มีช่องว่าง
+    province     TEXT,
+    plate_color  TEXT,                          -- จากกล้อง overview
+    ocr_conf     REAL,
+    char_confs   JSONB,                         -- ความมั่นใจรายตัวอักษร
+    flags        TEXT[]                         -- ['template_mismatch', ...]
+);
+
+CREATE TABLE plate_registry (                   -- watchlist ทะเบียน
+    site_id      TEXT NOT NULL REFERENCES sites(id),
+    plate_norm   TEXT NOT NULL,
+    owner_label  TEXT,                          -- 'รถส่งของบริษัท ก'
+    notes        TEXT,
+    watch        BOOLEAN NOT NULL DEFAULT false,
+    PRIMARY KEY (site_id, plate_norm)
+);
+</code></pre>
+<p><strong><span class="star">★</span> ทำไมต้องเก็บ <code>raw_text</code> คู่กับ <code>plate_norm</code></strong></p>
+<ul>
+<li>ใช้ debug ว่าอ่านผิดตรงไหน</li>
+<li>ใช้สร้าง confusion matrix จริงเพื่อปรับตารางอักษรสับสน</li>
+<li>ถ้าอัลกอริทึม normalize มีบั๊ก ยังกู้ได้โดยไม่ต้องประมวลผลภาพใหม่</li>
+</ul>
+<h3 id="2-8-pdpa">2.8 PDPA</h3>
+<pre><code class="language-sql">CREATE TABLE audit_log (
+    id          BIGSERIAL PRIMARY KEY,
+    actor       TEXT NOT NULL,                  -- ผู้ใช้ที่ทำ
+    action      TEXT NOT NULL,                  -- 'search_face' | 'view_person' | ...
+    target_type TEXT,
+    target_id   TEXT,
+    query       JSONB,                          -- เงื่อนไขที่ค้น
+    ts          TIMESTAMPTZ NOT NULL DEFAULT now(),
+    ip          INET
+);
+
+CREATE TABLE retention_policies (
+    scope  TEXT PRIMARY KEY,                    -- 'clips' | 'snapshots' | 'crops'
+                                                -- | 'face_embeddings' | 'events'
+    days   INT NOT NULL
+);
+</code></pre>
+<hr />
+<h2 id="3-index-และเหตุผล">3. <span class="star">★</span> Index และเหตุผล</h2>
+<pre><code class="language-sql">-- ค้นใบหน้าที่คล้ายกัน
+CREATE INDEX idx_face_emb_hnsw ON face_embeddings
+    USING hnsw (embedding vector_cosine_ops);
+
+-- ค้นรถคันเดิม
+CREATE INDEX idx_vehicle_emb_hnsw ON vehicles
+    USING hnsw (embedding vector_cosine_ops);
+
+-- <span class="star">★</span> ค้นทะเบียนแบบ fuzzy — สำคัญที่สุด
+CREATE INDEX idx_plates_norm_trgm ON plates
+    USING gin (plate_norm gin_trgm_ops);
+
+-- ตารางเรียงตามเวลา BRIN กินพื้นที่น้อยกว่า btree หลายสิบเท่า
+CREATE INDEX idx_events_start_brin ON events USING brin (start_ts);
+
+-- คิวรีหลักของหน้า UI
+CREATE INDEX idx_events_camera_ts ON events (camera_id, start_ts DESC);
+CREATE INDEX idx_events_label_ts  ON events (label, start_ts DESC);
+CREATE INDEX idx_events_site_ts   ON events (site_id, start_ts DESC);
+
+-- หา detection ของ event
+CREATE INDEX idx_detections_event ON detections (event_id, kind);
+</code></pre>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>Index</th>
+<th>ทำไม</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>HNSW</strong></td>
+<td>ค้น vector ที่ใกล้เคียงในเวลา sub-linear — ถ้าไม่มี ต้องสแกนทั้งตาราง</td>
+</tr>
+<tr>
+<td><strong>GIN + trgm</strong></td>
+<td>ทำให้ <code>plate_norm % 'query'</code> เร็ว — เป็นหัวใจของการค้นทะเบียนที่ OCR อ่านผิด</td>
+</tr>
+<tr>
+<td><strong>BRIN</strong></td>
+<td>ข้อมูลเรียงตามเวลาโดยธรรมชาติ BRIN ใช้พื้นที่แค่เศษเสี้ยวของ btree</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="3-1-พารามิเตอร์-hnsw">3.1 พารามิเตอร์ HNSW</h3>
+<pre><code class="language-sql">-- ตอนสร้าง index (ยิ่งสูง ยิ่งแม่น แต่สร้างช้าและกินแรม)
+CREATE INDEX ... USING hnsw (embedding vector_cosine_ops)
+    WITH (m = 16, ef_construction = 64);
+
+-- ตอนค้นหา (ปรับได้ต่อ session)
+SET hnsw.ef_search = 100;
+</code></pre>
+<p>ค่าเริ่มต้นนี้เหมาะกับปริมาณระดับล้าน vector ซึ่งเกินพอสำหรับไซต์จุดคอขวด</p>
+<hr />
+<h2 id="4-คิวรีตัวอย่าง">4. คิวรีตัวอย่าง</h2>
+<h3 id="4-1-ค้นทะเบียนแบบ-fuzzy-สองชั้น">4.1 ค้นทะเบียนแบบ fuzzy (สองชั้น)</h3>
+<pre><code class="language-sql">-- ชั้นที่ 1: กรองเร็วด้วย trigram index
+SELECT p.id, p.plate_norm, p.province, p.ocr_conf,
+       e.start_ts, e.camera_id, e.direction, c.nvr_channel,
+       similarity(p.plate_norm, :q) AS sim
+FROM plates p
+JOIN detections d ON d.id = p.detection_id
+JOIN events     e ON e.id = d.event_id
+JOIN cameras    c ON c.id = e.camera_id
+WHERE p.plate_norm % :q
+  AND e.start_ts BETWEEN :from_ts AND :to_ts
+ORDER BY sim DESC
+LIMIT 200;
+
+-- ชั้นที่ 2: จัดอันดับใหม่ในแอปด้วย weighted edit distance
+--            ที่ใช้ตารางอักษรสับสนไทย (ดู 05-thai-lpr.md หัวข้อ 4)
+</code></pre>
+<h3 id="4-2-ค้นใบหน้าจากรูปที่อัปโหลด">4.2 ค้นใบหน้าจากรูปที่อัปโหลด</h3>
+<pre><code class="language-sql">SELECT d.id, e.start_ts, e.camera_id, c.nvr_channel, d.crop_key,
+       1 - (f.embedding &lt;=&gt; :query_vec) AS similarity
+FROM face_embeddings f
+JOIN detections d ON d.id = f.detection_id
+JOIN events     e ON e.id = d.event_id
+JOIN cameras    c ON c.id = e.camera_id
+WHERE e.site_id = :site_id
+  AND e.start_ts BETWEEN :from_ts AND :to_ts
+ORDER BY f.embedding &lt;=&gt; :query_vec
+LIMIT 50;
+</code></pre>
+<blockquote>
+<p><code>&lt;=&gt;</code> คือ cosine distance ของ pgvector — ตัวดำเนินการนี้ใช้ HNSW index ได้</p>
+</blockquote>
+<h3 id="4-3-ตอนนี้มีรถอะไรอยู่ในโกดัง">4.3 <span class="star">★</span> &quot;ตอนนี้มีรถอะไรอยู่ในโกดัง&quot;</h3>
+<pre><code class="language-sql">WITH last_seen AS (
+    SELECT DISTINCT ON (p.plate_norm)
+           p.plate_norm, p.province, e.direction, e.start_ts, e.camera_id
+    FROM plates p
+    JOIN detections d ON d.id = p.detection_id
+    JOIN events     e ON e.id = d.event_id
+    WHERE e.site_id = :site_id
+      AND e.start_ts &gt; now() - INTERVAL '24 hours'
+      AND p.plate_norm IS NOT NULL
+    ORDER BY p.plate_norm, e.start_ts DESC
+)
+SELECT * FROM last_seen
+WHERE direction = 'in'        -- เห็นล่าสุดคือขาเข้า = ยังไม่ออก
+ORDER BY start_ts DESC;
+</code></pre>
+<h3 id="4-4-ค้นแบบผสม">4.4 ค้นแบบผสม</h3>
+<pre><code class="language-sql">SELECT e.id, e.start_ts, c.name, c.nvr_channel,
+       v.vehicle_type, v.color, p.plate_norm
+FROM events e
+JOIN cameras    c ON c.id = e.camera_id
+JOIN detections d ON d.event_id = e.id AND d.kind = 'vehicle'
+JOIN vehicles   v ON v.detection_id = d.id
+LEFT JOIN plates p ON p.id = v.plate_id
+WHERE e.site_id   = :site_id
+  AND e.camera_id = :camera_id
+  AND e.start_ts BETWEEN :from_ts AND :to_ts
+  AND v.color        = :color
+  AND v.vehicle_type = :vtype
+  AND e.direction    = 'in'
+ORDER BY e.start_ts DESC;
+</code></pre>
+<hr />
+<h2 id="5-retention-และการลบข้อมูล">5. Retention และการลบข้อมูล</h2>
+<h3 id="5-1-นโยบายที่แนะนำ">5.1 นโยบายที่แนะนำ</h3>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>ข้อมูล</th>
+<th>ค่าเริ่มต้น</th>
+<th>เหตุผล</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>คลิปวิดีโอ</td>
+<td>90 วัน</td>
+<td>กินพื้นที่มากที่สุด และ NVR มีของจริงอยู่แล้ว</td>
+</tr>
+<tr>
+<td>snapshot / crop</td>
+<td>365 วัน</td>
+<td>กินพื้นที่น้อย มีค่าในการค้นย้อนหลัง</td>
+</tr>
+<tr>
+<td><code>events</code> / <code>detections</code> / <code>plates</code></td>
+<td>365 วัน</td>
+<td>metadata เล็กมาก</td>
+</tr>
+<tr>
+<td><strong><code>face_embeddings</code></strong></td>
+<td><strong>ตามที่ฝ่ายกฎหมายกำหนด</strong></td>
+<td><span class="star">★</span> ข้อมูลชีวมิติ ต้องมีกำหนดลบชัดเจนตาม PDPA</td>
+</tr>
+<tr>
+<td><code>audit_log</code></td>
+<td>3 ปี</td>
+<td>เป็นหลักฐานการปฏิบัติตามกฎหมาย</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="5-2-งานลบข้อมูลรายวัน">5.2 งานลบข้อมูลรายวัน</h3>
+<pre><code class="language-sql">-- ลบที่ events แล้ว detections/plates/embeddings จะถูกลบตาม CASCADE
+DELETE FROM events
+WHERE start_ts &lt; now() - (SELECT days FROM retention_policies WHERE scope='events') * INTERVAL '1 day';
+</code></pre>
+<p><strong>หลังลบแถวแล้วต้องลบไฟล์ใน object store ด้วย</strong> — งานรายวันต้องเก็บ <code>crop_key</code> ที่จะลบไว้ก่อน แล้วจึงลบไฟล์ ไม่งั้นจะเหลือไฟล์กำพร้าสะสม</p>
+<h3 id="5-3-retention-ของดัชนีกับ-nvr-ต้องสัมพันธ์กัน">5.3 <span class="star">★</span> retention ของดัชนีกับ NVR ต้องสัมพันธ์กัน</h3>
+<p>ถ้าดัชนีเก็บ 1 ปี แต่ NVR เก็บ 30 วัน ผู้ใช้จะค้นเจอเหตุการณ์ที่วิดีโอถูกลบไปแล้ว
+→ <strong>หน้าผลลัพธ์ต้องแสดงคำเตือนเมื่อเหตุการณ์เก่ากว่าที่ NVR เก็บ</strong> เพื่อไม่ให้เสียเวลาไปหาวิดีโอที่ไม่มี</p>
+<hr />
+<h2 id="6-หลักการที่ยึดในการออกแบบ-schema">6. หลักการที่ยึดในการออกแบบ schema</h2>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>หลักการ</th>
+<th>ทำไม</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong><code>site_id</code> ในทุกตารางหลักตั้งแต่วันแรก</strong></td>
+<td>เพิ่มทีหลังต้องแก้ทุกคิวรี ใส่ตอนนี้แทบไม่มีต้นทุน</td>
+</tr>
+<tr>
+<td><strong>เวลาเก็บเป็น UTC เสมอ</strong> (<code>TIMESTAMPTZ</code>)</td>
+<td>แปลงเป็น <code>Asia/Bangkok</code> ตอนแสดงผล — ป้องกันบั๊กเวลาที่หายาก</td>
+</tr>
+<tr>
+<td><strong>เก็บข้อมูลดิบไว้เสมอ</strong> (<code>raw</code>, <code>raw_text</code>)</td>
+<td>ปรับอัลกอริทึมภายหลังได้โดยไม่ต้องประมวลผลภาพใหม่</td>
+</tr>
+<tr>
+<td><strong><code>ON DELETE CASCADE</code> ทุกความสัมพันธ์</strong></td>
+<td>retention ทำที่จุดเดียวคือ <code>events</code></td>
+</tr>
+<tr>
+<td><strong>ใช้ <code>frigate event id</code> เป็น PK ของ <code>events</code></strong></td>
+<td>ทำให้ idempotent — รับ event ซ้ำแล้วไม่เกิดแถวซ้ำ</td>
+</tr>
+</tbody>
+</table></div>
+<hr />
+<h2 id="เอกสารที่เกี่ยวข้อง">เอกสารที่เกี่ยวข้อง</h2>
+<ul>
+<li><a href="01-architecture.html"><code>01-architecture.md</code></a> — ภาพรวมการไหลของข้อมูล</li>
+<li><a href="05-thai-lpr.html"><code>05-thai-lpr.md</code></a> — การค้นทะเบียนแบบ fuzzy</li>
+<li><a href="06-pdpa-compliance.html"><code>06-pdpa-compliance.md</code></a> — ข้อกำหนดด้าน retention และ audit</li>
+</ul>
+
+  </main>
+</div>
+<script>
+(function () {
+  "use strict";
+  var KEY = "docs-checks-" + (document.body.getAttribute("data-doc") || "x");
+  var boxes = Array.prototype.slice.call(document.querySelectorAll("li.chk input"));
+  var saved = {};
+  try { saved = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { saved = {}; }
+  boxes.forEach(function (box, i) {
+    if (saved[i]) box.checked = true;
+    box.addEventListener("change", function () {
+      saved[i] = box.checked;
+      try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch (e) {}
+    });
+  });
+  var reset = document.querySelector(".checks-reset");
+  if (reset) reset.addEventListener("click", function () {
+    boxes.forEach(function (b) { b.checked = false; });
+    saved = {};
+    try { localStorage.removeItem(KEY); } catch (e) {}
+  });
+
+  var links = {};
+  Array.prototype.forEach.call(document.querySelectorAll(".toc a"), function (a) {
+    links[a.getAttribute("href").slice(1)] = a;
+  });
+  var heads = document.querySelectorAll(".main h2");
+  if (!heads.length || !window.IntersectionObserver) return;
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      var link = links[e.target.id];
+      if (!link || !e.isIntersecting) return;
+      Object.keys(links).forEach(function (k) { links[k].classList.remove("is-active"); });
+      link.classList.add("is-active");
+    });
+  }, { rootMargin: "-8% 0px -80% 0px" });
+  Array.prototype.forEach.call(heads, function (h) { io.observe(h); });
+})();
+</script>
+</body>
+</html>
