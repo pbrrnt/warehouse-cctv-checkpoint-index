@@ -85,7 +85,12 @@ services:
       - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
       - mosquitto_data:/mosquitto/data
     ports:
-      - "${MQTT_PORT}:1883"
+      # ★ ผูกกับ localhost เท่านั้น ไม่เปิดสู่เครือข่าย (เหมือน postgres/redis
+      #   ด้านล่าง) — mosquitto.conf ตั้ง allow_anonymous true เพราะเชื่อว่า
+      #   broker นี้เข้าถึงได้แค่จากเครื่องเดียวกัน ถ้า bind ทุก interface
+      #   (ค่าเดิมก่อนแก้) ใครก็ได้ในวง LAN จะต่อ MQTT แบบไม่ต้อง auth เลย
+      #   เห็น/ปลอม frigate/events ได้ — เจอจากการตรวจสอบ static ก่อนขึ้นระบบจริง
+      - "127.0.0.1:${MQTT_PORT}:1883"
     environment:
       TZ: ${TZ}
     logging:
@@ -183,9 +188,18 @@ services:
       FRIGATE_URL: http://frigate:5000
       MEDIA_PATH: /media
       INDEXER_WORKERS: ${INDEXER_WORKERS}
+      # ★ services/common/analytics/vehicle.py default คำนวณ path จาก
+      #   ตำแหน่งไฟล์เอง (/app/models) แต่ volume mount จริงอยู่ที่ /models
+      #   (container root) — ต้องระบุตรง ๆ ไม่งั้นหาไฟล์โมเดลไม่เจอ
+      MODELS_PATH: /models
+      # ★ ไฟล์ log ที่อยู่ทนแยกจากอายุ container (ดู
+      #   services/common/logging_config.py) — คนละเรื่องกับ Docker
+      #   json-file log ด้านล่างที่หายไปตอน container ถูกลบ/สร้างใหม่
+      LOG_DIR: /logs
     volumes:
       - ${MEDIA_PATH}/index:/media
       - ./models:/models:ro
+      - ${DATA_ROOT}/logs:/logs
     depends_on:
       postgres:
         condition: service_healthy
@@ -226,9 +240,11 @@ services:
       RETENTION_EVENTS_DAYS: ${RETENTION_EVENTS_DAYS}
       RETENTION_FACE_EMBEDDINGS_DAYS: ${RETENTION_FACE_EMBEDDINGS_DAYS}
       API_SECRET_KEY: ${API_SECRET_KEY}
+      LOG_DIR: /logs
     volumes:
       - ${MEDIA_PATH}/index:/media:ro
       - ./models:/models:ro
+      - ${DATA_ROOT}/logs:/logs
     ports:
       - "${API_PORT}:8000"
     depends_on:

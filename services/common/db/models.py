@@ -225,7 +225,7 @@ class Vehicle(Base):
     )
     vehicle_type: Mapped[str | None] = mapped_column(Text)  # 'car' | 'van' | 'truck' | 'bus'
     color: Mapped[str | None] = mapped_column(Text)
-    embedding: Mapped[list[float] | None] = mapped_column(Vector(256))  # vehicle-reid-0001
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(512))  # vehicle-reid-0001
     plate_id: Mapped[int | None] = mapped_column(ForeignKey("plates.id", ondelete="SET NULL"))
 
     __table_args__ = (

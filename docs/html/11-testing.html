@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>11. วิธีทดสอบโค้ด — ระบบดัชนีสืบค้นภาพ</title>
+<style>
+:root {
+  --ground:#F5F4F2; --surface:#FFFFFF; --surface-2:#EEECE8;
+  --ink:#191714; --ink-2:#57524B; --ink-3:#8A837A;
+  --rule:#DEDAD4; --rule-strong:#C4BEB5;
+  --accent:#A66A00; --accent-ink:#7A4E00; --accent-wash:#F8F0DE;
+  --pass:#216B45; --pass-wash:#E4F0E9; --fail:#A32219; --fail-wash:#F8E6E4;
+  --shadow:0 1px 2px rgba(25,23,20,.05), 0 8px 24px -16px rgba(25,23,20,.28);
+  --font-th:"Leelawadee UI","Noto Sans Thai","Thonburi","Sarabun","Segoe UI",Tahoma,system-ui,sans-serif;
+  --font-mono:ui-monospace,"SF Mono","Cascadia Mono","Segoe UI Mono","Roboto Mono",Menlo,Consolas,monospace;
+  --measure:70ch; --rail:16rem;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground:#141210; --surface:#1C1917; --surface-2:#24201C;
+    --ink:#EFEAE2; --ink-2:#ADA49A; --ink-3:#7C736A;
+    --rule:#332D27; --rule-strong:#4A423A;
+    --accent:#E0A648; --accent-ink:#EFC077; --accent-wash:#2C2313;
+    --pass:#5FBF8C; --pass-wash:#16301F; --fail:#E5796C; --fail-wash:#331A17;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"] {
+  --ground:#141210; --surface:#1C1917; --surface-2:#24201C;
+  --ink:#EFEAE2; --ink-2:#ADA49A; --ink-3:#7C736A;
+  --rule:#332D27; --rule-strong:#4A423A;
+  --accent:#E0A648; --accent-ink:#EFC077; --accent-wash:#2C2313;
+  --pass:#5FBF8C; --pass-wash:#16301F; --fail:#E5796C; --fail-wash:#331A17;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.7);
+}
+:root[data-theme="light"] {
+  --ground:#F5F4F2; --surface:#FFFFFF; --surface-2:#EEECE8;
+  --ink:#191714; --ink-2:#57524B; --ink-3:#8A837A;
+  --rule:#DEDAD4; --rule-strong:#C4BEB5;
+  --accent:#A66A00; --accent-ink:#7A4E00; --accent-wash:#F8F0DE;
+  --pass:#216B45; --pass-wash:#E4F0E9; --fail:#A32219; --fail-wash:#F8E6E4;
+  --shadow:0 1px 2px rgba(25,23,20,.05), 0 8px 24px -16px rgba(25,23,20,.28);
+}
+
+* { box-sizing:border-box; }
+body {
+  margin:0; background:var(--ground); color:var(--ink);
+  font-family:var(--font-th); font-size:16.5px; line-height:1.85;
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+}
+:where(a){ color:var(--accent-ink); text-decoration-color:color-mix(in srgb, var(--accent) 40%, transparent); text-underline-offset:.22em; }
+:where(a):hover{ text-decoration-color:var(--accent); }
+:where(a,button,input,summary):focus-visible{ outline:2px solid var(--accent); outline-offset:3px; border-radius:3px; }
+
+.page{ display:grid; grid-template-columns:var(--rail) minmax(0,1fr); gap:3.5rem;
+       max-width:78rem; margin:0 auto; padding:0 2rem 6rem; align-items:start; }
+.main{ min-width:0; max-width:var(--measure); }
+@media (max-width:60rem){ .page{ grid-template-columns:minmax(0,1fr); gap:0; padding:0 1.15rem 4rem; } .main{ max-width:none; } }
+
+.masthead{ grid-column:1/-1; border-bottom:1px solid var(--rule);
+           padding:3.5rem 0 2rem; margin-bottom:2.5rem; display:flex; flex-direction:column; gap:.9rem; }
+.masthead__kicker{ font-family:var(--font-mono); font-size:.72rem; letter-spacing:.14em;
+                   text-transform:uppercase; color:var(--ink-3); display:flex; flex-wrap:wrap; gap:.55rem .9rem; align-items:center; }
+.masthead__kicker b{ color:var(--accent-ink); font-weight:600; }
+.masthead__kicker a{ color:var(--ink-3); text-decoration:none; }
+.masthead__kicker a:hover{ color:var(--accent-ink); }
+.masthead h1{ margin:0; font-size:clamp(1.8rem,1.2rem + 2.2vw,2.5rem); line-height:1.35;
+              font-weight:700; letter-spacing:-.005em; text-wrap:balance; }
+.masthead__sub{ margin:0; max-width:56ch; color:var(--ink-2); font-size:1.02rem; }
+
+.toc{ position:sticky; top:2rem; font-size:.875rem; line-height:1.6;
+      border-left:1px solid var(--rule); padding-left:1.1rem; }
+.toc__label{ font-family:var(--font-mono); font-size:.68rem; letter-spacing:.14em;
+             text-transform:uppercase; color:var(--ink-3); margin-bottom:.85rem; }
+.toc ol{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:.1rem; }
+.toc li{ margin:0; }
+.toc a{ display:block; padding:.3rem 0; color:var(--ink-2); text-decoration:none; border-radius:2px; }
+.toc a:hover{ color:var(--ink); }
+.toc a.is-active{ color:var(--accent-ink); font-weight:600; }
+@media (max-width:60rem){
+  .toc{ position:static; border-left:0; border:1px solid var(--rule); border-radius:3px;
+        background:var(--surface); padding:1rem 1.1rem; margin-bottom:2.5rem; }
+  .toc ol{ columns:2; column-gap:1.5rem; }
+  .toc li{ break-inside:avoid; }
+}
+
+h2{ margin:3.4rem 0 1.5rem; padding-bottom:.55rem; border-bottom:2px solid var(--ink);
+    font-size:clamp(1.25rem,1.1rem + .7vw,1.5rem); line-height:1.4; font-weight:700;
+    text-wrap:balance; scroll-margin-top:1.5rem; }
+.main > h2:first-child{ margin-top:0; }
+h3{ margin:2.6rem 0 .9rem; font-size:1.06rem; font-weight:700; line-height:1.5; scroll-margin-top:1.5rem; }
+h4{ margin:1.9rem 0 .6rem; font-size:.95rem; font-weight:700; color:var(--ink-2); }
+p{ margin:0 0 1rem; }
+strong{ font-weight:700; }
+ul,ol{ margin:0 0 1.1rem; padding-left:1.35rem; }
+li{ margin-bottom:.4rem; }
+li:last-child{ margin-bottom:0; }
+li > ul, li > ol { margin-top:.4rem; }
+hr{ border:0; border-top:1px solid var(--rule); margin:2.5rem 0; }
+
+/* ★ ในต้นฉบับ = ระดับความสำคัญ */
+.star{ color:var(--accent); font-size:.9em; }
+
+blockquote{ margin:1.4rem 0; padding:.1rem 0 .1rem 1.1rem;
+            border-left:3px solid var(--rule-strong); color:var(--ink-2); font-size:.96rem; }
+blockquote strong{ color:var(--ink); }
+blockquote > :last-child{ margin-bottom:0; }
+/* blockquote ที่ขึ้นต้นด้วย ★ = คำเตือนสำคัญ */
+blockquote.is-flag{ background:var(--surface); border:1px solid var(--rule);
+                    border-left:4px solid var(--accent); border-radius:2px;
+                    padding:1.05rem 1.25rem; box-shadow:var(--shadow); color:var(--ink); }
+
+.tw{ overflow-x:auto; margin:1.4rem 0; border:1px solid var(--rule); border-radius:3px;
+     background:var(--surface); -webkit-overflow-scrolling:touch; }
+table{ border-collapse:collapse; width:100%; font-size:.93rem; line-height:1.65;
+       font-variant-numeric:tabular-nums; }
+thead th{ background:var(--surface-2); text-align:left; font-weight:700; font-size:.8rem;
+          color:var(--ink-2); padding:.6rem .85rem; border-bottom:1px solid var(--rule-strong); white-space:nowrap; }
+td{ padding:.62rem .85rem; border-bottom:1px solid var(--rule); vertical-align:top; text-align:left; }
+tbody tr:last-child td{ border-bottom:0; }
+td:empty{ min-width:4rem; }
+
+code{ font-family:var(--font-mono); font-size:.875em; background:var(--surface-2);
+      padding:.1em .38em; border-radius:2px; }
+pre{ font-family:var(--font-mono); font-size:.85rem; line-height:1.7; background:var(--surface);
+     border:1px solid var(--rule); border-radius:3px; padding:1rem 1.15rem; margin:1.3rem 0;
+     overflow-x:auto; color:var(--ink); font-variant-numeric:tabular-nums; }
+pre code{ background:none; padding:0; font-size:1em; white-space:pre; }
+
+/* เช็กลิสต์ติ๊กได้ จำสถานะไว้ — ใช้ li.chk เพื่อรองรับรายการซ้อนชั้น */
+ul:has(> li.chk){ list-style:none; margin:1.1rem 0 1.5rem; padding:0; }
+li.chk > ul{ margin:.3rem 0 .5rem 1.8rem; }
+li.chk{ margin:0; }
+li.chk > label{ display:flex; gap:.7rem; align-items:flex-start; padding:.5rem .7rem;
+                border-radius:3px; cursor:pointer; transition:background .12s ease; }
+li.chk > label:hover{ background:var(--surface-2); }
+li.chk input{ appearance:none; flex:0 0 auto; width:1.05rem; height:1.05rem; margin:.38rem 0 0;
+              border:1.5px solid var(--rule-strong); border-radius:2px; background:var(--surface);
+              cursor:pointer; position:relative; }
+li.chk input:checked{ background:var(--pass); border-color:var(--pass); }
+li.chk input:checked::after{ content:""; position:absolute; left:5px; top:1px; width:4px; height:9px;
+                             border:solid var(--surface); border-width:0 2px 2px 0; transform:rotate(42deg); }
+li.chk input:checked + span{ color:var(--ink-3); text-decoration:line-through; text-decoration-thickness:1px; }
+li.chk > label > span{ flex:1; }
+.checks-reset{ font-family:var(--font-mono); font-size:.72rem; letter-spacing:.06em; background:none;
+               border:1px solid var(--rule); border-radius:2px; color:var(--ink-3);
+               padding:.3rem .65rem; cursor:pointer; margin:.4rem 0 1.5rem; display:inline-block; }
+.checks-reset:hover{ color:var(--ink); border-color:var(--rule-strong); }
+
+/* หน้า index */
+.cards{ list-style:none; padding:0; margin:0; display:grid; gap:.65rem; }
+.cards li{ margin:0; }
+.cards a{ display:flex; gap:1rem; align-items:baseline; text-decoration:none; color:inherit;
+          background:var(--surface); border:1px solid var(--rule); border-radius:3px;
+          padding:.9rem 1.1rem; transition:border-color .12s ease, transform .12s ease; }
+.cards a:hover{ border-color:var(--accent); transform:translateX(2px); }
+.cards .n{ font-family:var(--font-mono); font-size:.85rem; color:var(--ink-3); font-variant-numeric:tabular-nums; }
+.cards .t{ font-weight:700; display:block; margin-bottom:.1rem; }
+.cards .d{ color:var(--ink-2); font-size:.92rem; display:block; line-height:1.6; }
+.cards .is-key .t{ color:var(--accent-ink); }
+.cards a.is-key{ border-left:3px solid var(--accent); }
+
+@media print{
+  :root{ --ground:#fff; --surface:#fff; --surface-2:#f2f2f2; --ink:#000; --ink-2:#333; --ink-3:#666;
+         --rule:#bbb; --rule-strong:#888; --accent:#000; --accent-ink:#000; --accent-wash:#f4f4f4; --shadow:none; }
+  body{ font-size:10.5pt; line-height:1.65; }
+  .toc,.checks-reset{ display:none; }
+  .page{ display:block; max-width:none; padding:0; }
+  h2,h3,h4{ page-break-after:avoid; }
+  .tw,pre,blockquote{ page-break-inside:avoid; }
+  a{ text-decoration:none; color:#000; }
+}
+@media (prefers-reduced-motion: reduce){ *{ animation:none !important; transition:none !important; scroll-behavior:auto !important; } }
+html{ scroll-behavior:smooth; }
+</style>
+</head>
+<body data-doc="11-testing">
+<div class="page">
+  <header class="masthead">
+    <div class="masthead__kicker">
+      <span>เอกสาร 11</span><span>·</span><span>ระบบดัชนีสืบค้นภาพจากกล้องวงจรปิด</span><span>·</span><a href="index.html"><b>สารบัญทั้งหมด</b></a>
+    </div>
+    <h1>11. วิธีทดสอบโค้ด</h1>
+    <p class="masthead__sub">อัปเดตล่าสุด: หลังต่อ <code>vehicle.py</code>/<code>thai_ocr.py</code> เข้า <code>worker.py</code> จริง (แยกตาม <code>cameras.role</code>, ADR-021) — ดู <a href="00-decisions.html"><code>00-decisions.md</code></a> สำหรับบริบทการตัดสินใจแต่ละเรื่อง</p>
+  </header>
+  <nav class="toc" aria-label="สารบัญ">
+    <div class="toc__label">สารบัญ</div>
+    <ol>
+      <li><a href="#1-รันชุดเทสต์ทั้งหมด">1. รันชุดเทสต์ทั้งหมด</a></li>
+      <li><a href="#2-ไฟล์เทสต์มีอะไรบ้าง">2. ไฟล์เทสต์มีอะไรบ้าง</a></li>
+      <li><a href="#3-แต่ละไฟล์แบ่ง-2-กลุ่มเทสต์เสมอ-รูปแบบที่ใช้ซ้ำทุกโมดูล-ai">3. แต่ละไฟล์แบ่ง 2 กลุ่มเทสต์เสมอ (รูปแบบที่ใช้ซ้ำทุกโมดูล AI)</a></li>
+      <li><a href="#4-สิ่งที่ชุดเทสต์นี้-ไม่-ครอบคลุม-ต้องพิสูจน์ตอนขึ้นระบบจริง">4. สิ่งที่ชุดเทสต์นี้ &quot;ไม่&quot; ครอบคลุม — ต้องพิสูจน์ตอนขึ้นระบบจริง</a></li>
+      <li><a href="#5-ก่อนรันเทสต์กลุ่ม-integration-ของโมดูล-ai">5. ก่อนรันเทสต์กลุ่ม integration ของโมดูล AI</a></li>
+    </ol>
+  </nav>
+  <main class="main">
+<h2 id="1-รันชุดเทสต์ทั้งหมด">1. รันชุดเทสต์ทั้งหมด</h2>
+<pre><code class="language-bash">python -m unittest discover -s tests
+</code></pre>
+<p>รันจาก root โปรเจกต์ (<code>C:\IP Camera RTSP Projects</code>) ไม่ต้องมี Postgres/MQTT/Redis/Frigate จริง — ทุกเทสต์ mock ส่วนที่คุยกับ infra ภายนอก</p>
+<p>รันไฟล์เดียว (เร็วกว่าตอนแก้เฉพาะจุด):</p>
+<pre><code class="language-bash">python -m unittest tests.test_plate_normalize -v
+python -m unittest tests.test_indexer -v
+python -m unittest tests.test_thai_ocr -v
+python -m unittest tests.test_vehicle -v
+python -m unittest tests.test_api -v
+python -m unittest tests.test_logging_config -v
+python -m unittest tests.test_seed_site -v
+python -m unittest tests.test_check_time_sync -v
+</code></pre>
+<h2 id="2-ไฟล์เทสต์มีอะไรบ้าง">2. ไฟล์เทสต์มีอะไรบ้าง</h2>
+<div class="tw"><table>
+<thead>
+<tr>
+<th>ไฟล์</th>
+<th>ทดสอบอะไร</th>
+<th>ต้องมีอะไรก่อนรัน</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>tests/test_plate_normalize.py</code></td>
+<td>ทำความสะอาด/ตรวจสอบข้อความ OCR ป้ายทะเบียนไทย (37 เคส)</td>
+<td>ไม่ต้องมีอะไรเพิ่ม</td>
+</tr>
+<tr>
+<td><code>tests/test_indexer.py</code></td>
+<td>MQTT→Redis Stream→Postgres orchestration ทั้งเส้นทาง (parse event, direction, snapshot, upsert, แยกงาน vehicle/plate ตาม <code>cameras.role</code>) — ล้วน mock session/frigate client/store/vehicle_analyzer/plate_reader</td>
+<td>ไม่ต้องมีอะไรเพิ่ม (inject fake analyzer/reader เข้า <code>EventWorker</code> โดยตรง ไม่โหลดโมเดลจริงเลย)</td>
+</tr>
+<tr>
+<td><code>tests/test_thai_ocr.py</code></td>
+<td>อ่านตัวอักษรป้ายทะเบียนด้วย PaddleOCR</td>
+<td>กลุ่ม integration ต้องมีฟอนต์ Leelawadee (<code>C:/Windows/Fonts/leelawad.ttf</code>) — ถ้าไม่มีจะ skip อัตโนมัติ</td>
+</tr>
+<tr>
+<td><code>tests/test_vehicle.py</code></td>
+<td>จำแนกประเภท/สีรถ + สร้าง embedding ด้วย OpenVINO</td>
+<td>กลุ่ม integration ต้องรัน <code>python scripts/fetch_models.py</code> ก่อน — ถ้าไม่มีไฟล์โมเดลจะ skip อัตโนมัติ</td>
+</tr>
+<tr>
+<td><code>tests/test_api.py</code></td>
+<td>search API — pure function (rerank, timefmt, auth), query builder (compile เป็น SQL เช็คโครงสร้าง), FastAPI route ผ่าน <code>TestClient</code> (mock session), <strong>CRUD ทะเบียนที่รู้จัก (<code>plate_registry</code>) กับ SQLite จริง</strong> (in-memory ไม่ mock — ตารางนี้ไม่มี JSONB/pgvector เลยรันบน SQLite ได้ตรง ๆ)</td>
+<td>ต้องมี <code>httpx</code> ติดตั้งด้วย (<code>pip install httpx</code>) — <code>TestClient</code> ของ FastAPI ต้องการ ไม่ได้อยู่ใน <code>services/api/requirements.txt</code> เพราะตัว service จริงตอนรันไม่ต้องใช้</td>
+</tr>
+<tr>
+<td><code>tests/test_logging_config.py</code></td>
+<td><code>setup_logging()</code> เขียน log ไปไฟล์ที่อยู่ทนได้จริง, สร้างโฟลเดอร์ให้เอง, ไม่ raise ถ้าเขียนไม่ได้</td>
+<td>ไม่ต้องมีอะไรเพิ่ม — <strong>ระวังถ้าจะแก้ไฟล์นี้:</strong> setup_logging() แก้ root logger (global) ต้อง snapshot/restore handlers ใน setUp/tearDown ไม่งั้นกวน test module อื่น (ดู docstring ในไฟล์เทสต์)</td>
+</tr>
+<tr>
+<td><code>tests/test_seed_site.py</code></td>
+<td><code>scripts/seed_site.py</code> — validate_config() (pure), seed() upsert site/camera (mock session ไม่ใช้ SQLite เพราะ Camera มี JSONB), ยืนยันว่า <code>site_config.example.json</code> เองผ่าน validate จริง</td>
+<td>ไม่ต้องมีอะไรเพิ่ม</td>
+</tr>
+<tr>
+<td><code>tests/test_check_time_sync.py</code></td>
+<td><code>scripts/check_time_sync.py</code> — parse ONVIF SOAP response (รวม prefix คนละแบบ), คำนวณ offset หัก round-trip, จัดรูปแบบรายงาน+เกณฑ์ผ่าน/ไม่ผ่าน, อ่าน device list จาก config</td>
+<td>ไม่ต้องมีอะไรเพิ่ม — <strong><code>query_onvif_time()</code> (ยิง HTTP จริง) ไม่มีเทสต์เลย</strong> ไม่มีอุปกรณ์ ONVIF จริงให้ทดสอบตอนเขียน ใช้ <code>--single &lt;ip&gt;</code> ทดสอบเองตอนมีอุปกรณ์จริง</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>สถานะล่าสุด (เช็คก่อนอ้างอิง — ไฟล์อาจเปลี่ยนหลังจากนี้):</strong> รวม 174 เคส ผ่านหมด ใช้เวลา ~15-25 วินาที (ส่วนใหญ่หมดไปกับโหลดโมเดล PaddleOCR/OpenVINO ในกลุ่ม integration ครั้งแรก)</p>
+<h2 id="3-แต่ละไฟล์แบ่ง-2-กลุ่มเทสต์เสมอ-รูปแบบที่ใช้ซ้ำทุกโมดูล-ai">3. แต่ละไฟล์แบ่ง 2 กลุ่มเทสต์เสมอ (รูปแบบที่ใช้ซ้ำทุกโมดูล AI)</h2>
+<ol>
+<li><strong>หน่วยทดสอบเร็ว (mock ทั้งหมด)</strong> — ไม่โหลดโมเดลจริง รันได้ทุกเครื่องทุกครั้ง ทดสอบ logic ล้วน (การแปลง output โมเดล, การจัดกลุ่ม, การตัดสินใจ) ผ่าน fake object ที่ inject เข้าไปแทนโมเดล/session/client จริง</li>
+<li><strong>เทสต์ end-to-end กับของจริง (integration)</strong> — โหลดโมเดลจริง (PaddleOCR/OpenVINO) รันกับภาพสังเคราะห์ (สร้างด้วย PIL ตอนรันเทสต์เลย ไม่ commit ภาพเข้า git) ยืนยันว่า pipeline ทั้งสายรันได้ไม่ error — <strong>ไม่ได้วัดความแม่นยำกับภาพจริงจากกล้อง</strong> ใช้ <code>@unittest.skipUnless(...)</code> ข้ามอัตโนมัติถ้าเครื่องไม่พร้อม (ไม่มีฟอนต์/ไม่มีไฟล์โมเดล/import ไม่ได้) แทนที่จะ fail</li>
+</ol>
+<p>เพิ่มเทสต์ให้โมดูล AI ใหม่ในอนาคต ทำตามรูปแบบนี้เพื่อความสม่ำเสมอ</p>
+<h2 id="4-สิ่งที่ชุดเทสต์นี้-ไม่-ครอบคลุม-ต้องพิสูจน์ตอนขึ้นระบบจริง">4. สิ่งที่ชุดเทสต์นี้ &quot;ไม่&quot; ครอบคลุม — ต้องพิสูจน์ตอนขึ้นระบบจริง</h2>
+<ul>
+<li><strong>Postgres จริง</strong> — <code>services/common/db/models.py</code> ตรวจสอบแค่ว่า DDL compile ถูกต้อง (<code>db/migrations/README.md</code>) ยังไม่เคยรัน migration กับ Postgres จริง (เครื่องพัฒนาไม่มี Docker)</li>
+<li><strong>MQTT/Redis/Frigate จริง</strong> — <code>services/indexer/*.py</code> mock ทั้งหมด ยัง<strong>ไม่เคย</strong>ทดสอบกับ Frigate ที่รันจริง โดยเฉพาะ:
+<ul>
+<li>payload MQTT จริงจาก <code>frigate/events</code> (ดูหมายเหตุความน่าเชื่อถือใน <code>frigate_events.py</code>)</li>
+<li>query param <code>crop=1</code> ของ <code>GET /api/events/&lt;id&gt;/snapshot.jpg</code> (ใช้ป้อนภาพเข้า <code>vehicle.py</code> และ <code>thai_ocr.py</code>) — อ้างอิงจากเอกสาร Frigate ยังไม่เคยยิงจริง</li>
+<li><code>cameras.role</code> ('lpr'/'overview') ต้องตั้งถูกต้องจริงตอน onboard กล้อง ไม่งั้น <code>worker.py</code> จะไม่วิเคราะห์อะไรเลย (ดู <code>03-camera-onboarding.md</code>)</li>
+</ul>
+</li>
+<li><strong>ความแม่นยำของโมเดล AI กับภาพจริง</strong> — <code>thai_ocr.py</code>/<code>vehicle.py</code> ทดสอบกับภาพสังเคราะห์เท่านั้น (ฟอนต์/สี่เหลี่ยมสีวาดเอง) แสง/มุม/ระยะจากกล้องจริงต่างจากภาพสังเคราะห์มาก ต้องวัดผลซ้ำกับภาพจากไซต์นำร่อง — โดยเฉพาะการอ่านป้ายตรงจากภาพครอปกล้อง lpr โดยไม่มี <code>plate_detect.py</code> แยก (ADR-021) ยังไม่เคยพิสูจน์เลยว่าพอหรือไม่</li>
+<li><strong>กล้องจริง/เครือข่ายจริง</strong> — ดู checklist ทดสอบหน้างาน (day/night) ใน <a href="10-chokepoint-design.html"><code>10-chokepoint-design.md</code></a> และบันทึกปัญหาที่เจอจริงแล้วใน <a href="00-decisions.html"><code>00-decisions.md</code></a> ท้ายเอกสาร</li>
+<li><strong><code>services/api/search.py</code> คิวรีจริง</strong> — <code>tests/test_api.py</code> compile query เป็น Postgres SQL text เช็คโครงสร้างเท่านั้น (join ถูกตาราง, operator ถูก) ไม่เคยรันจริงกับ Postgres โดยเฉพาะ pg_trgm operator <code>%</code> และ <code>DISTINCT ON</code> ที่ SQLAlchemy สร้างให้ — ต้องพิสูจน์ด้วยข้อมูลจริงตอนขึ้นระบบ</li>
+</ul>
+<h2 id="5-ก่อนรันเทสต์กลุ่ม-integration-ของโมดูล-ai">5. ก่อนรันเทสต์กลุ่ม integration ของโมดูล AI</h2>
+<pre><code class="language-bash">python scripts/fetch_models.py     # โหลดไฟล์โมเดล OpenVINO (vehicle.py ใช้)
+</code></pre>
+<p>PaddleOCR (<code>thai_ocr.py</code>) ไม่ต้องรันอะไรเพิ่ม — ตัว library ดาวน์โหลด/แคชโมเดลเองอัตโนมัติที่ <code>~/.paddlex</code> ตอนเรียกใช้ครั้งแรก (ครั้งแรกจะช้ากว่าปกติเพราะต้องโหลด)</p>
+
+  </main>
+</div>
+<script>
+(function () {
+  "use strict";
+  var KEY = "docs-checks-" + (document.body.getAttribute("data-doc") || "x");
+  var boxes = Array.prototype.slice.call(document.querySelectorAll("li.chk input"));
+  var saved = {};
+  try { saved = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { saved = {}; }
+  boxes.forEach(function (box, i) {
+    if (saved[i]) box.checked = true;
+    box.addEventListener("change", function () {
+      saved[i] = box.checked;
+      try { localStorage.setItem(KEY, JSON.stringify(saved)); } catch (e) {}
+    });
+  });
+  var reset = document.querySelector(".checks-reset");
+  if (reset) reset.addEventListener("click", function () {
+    boxes.forEach(function (b) { b.checked = false; });
+    saved = {};
+    try { localStorage.removeItem(KEY); } catch (e) {}
+  });
+
+  var links = {};
+  Array.prototype.forEach.call(document.querySelectorAll(".toc a"), function (a) {
+    links[a.getAttribute("href").slice(1)] = a;
+  });
+  var heads = document.querySelectorAll(".main h2");
+  if (!heads.length || !window.IntersectionObserver) return;
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      var link = links[e.target.id];
+      if (!link || !e.isIntersecting) return;
+      Object.keys(links).forEach(function (k) { links[k].classList.remove("is-active"); });
+      link.classList.add("is-active");
+    });
+  }, { rootMargin: "-8% 0px -80% 0px" });
+  Array.prototype.forEach.call(heads, function (h) { io.observe(h); });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+# dependency เฉพาะโมดูล AI ใน services/common/analytics/
+# ไฟล์โมเดลไม่ได้อยู่ในนี้ (ดาวน์โหลดด้วย scripts/fetch_models.py แยกต่างหาก
+# ยกเว้น PaddleOCR ที่แคชโมเดลเองอัตโนมัติตอนเรียกใช้ครั้งแรก)
+
+numpy>=1.24,<2.0
+# ★ ต้องเป็น -headless — opencv-python ธรรมดาต้องการ libGL.so.1/libglib2.0
+# ที่ไม่มีใน python:3.11-slim (ที่ services/indexer/Dockerfile ใช้) จะ
+# ImportError ตอน import cv2 บน container จริง (เจอปัญหานี้เฉพาะบน Linux
+# container เท่านั้น เครื่องพัฒนา Windows ไม่เจอเพราะ DLL คนละชุด — ต้องคอย
+# นึกไว้เวลาแก้ dependency พวกนี้) เราไม่ใช้ GUI ของ OpenCV เลยในโปรเจกต์นี้
+# (แค่ imdecode/resize/imencode) headless จึงพอสำหรับทุกโมดูล
+opencv-python-headless>=4.5,<5.0
+
+# thai_ocr.py
+paddleocr>=3.0,<4.0
+paddlepaddle>=3.0,<4.0
+
+# vehicle.py
+openvino>=2024.0

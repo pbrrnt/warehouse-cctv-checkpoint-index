@@ -226,13 +226,41 @@ sudo systemctl restart chrony
 docker compose config
 ```
 
-- [ ] สตาร์ตระบบ:
+- [ ] สตาร์ต**เฉพาะ infrastructure ก่อน** (frigate, mosquitto, postgres, redis — ยังไม่ใช่ indexer/api/web):
 
 ```bash
 docker compose up -d
 ```
 
-- [ ] ดู log ว่าไม่มี error:
+- [ ] รอ postgres พร้อม (`docker compose ps` เห็น `healthy`) แล้ว**สร้างตาราง** (ยังไม่มีใครสร้างให้อัตโนมัติ):
+
+```bash
+pip install -r services/common/requirements.txt requests   # sqlalchemy/alembic/pgvector/psycopg + requests (check_time_sync.py) บนเครื่อง host
+cd db
+DATABASE_URL="postgresql+psycopg://<user>:<pass>@localhost:<POSTGRES_PORT>/<db>" python -m alembic upgrade head
+cd ..
+```
+
+- [ ] **★ ห้ามข้าม — ใส่ข้อมูลไซต์+กล้องลง DB** (ไม่มีขั้นนี้ = `worker.py` จะเจอ "ไม่รู้จักกล้อง" แล้วข้ามทุก event เงียบ ๆ ไม่มี error ให้เห็น ดูเหมือนระบบทำงานปกติทั้งที่ไม่มีข้อมูลออกมาเลย):
+
+```bash
+cp scripts/site_config.example.json site_config.json   # แก้ site/cameras ให้ตรงกับไซต์จริง (nvr_channel, zone_config ฯลฯ)
+python scripts/seed_site.py --config site_config.json --database-url "postgresql+psycopg://<user>:<pass>@localhost:<POSTGRES_PORT>/<db>"
+```
+
+- [ ] **ดาวน์โหลดไฟล์โมเดล AI** (ไม่ได้อยู่ใน git — ดู `docs/11-testing.md`):
+
+```bash
+python scripts/fetch_models.py
+```
+
+- [ ] สตาร์ตระบบส่วนที่เหลือ (indexer, api, web) — **ต้องมี `--profile app`** ไม่งั้นจะสตาร์ตแค่ infra เหมือนเดิม:
+
+```bash
+docker compose --profile app up -d
+```
+
+- [ ] ดู log ว่าไม่มี error (ทั้ง Docker และไฟล์ที่อยู่ทนกว่าใน `${DATA_ROOT}/logs/` — ดู `07-operations.md` หัวข้อ 2.4):
 
 ```bash
 docker compose logs -f --tail=100
@@ -254,13 +282,14 @@ python scripts/probe_cameras.py
 
 ### 6.2 ★ ตรวจการซิงก์เวลา
 
-- [ ] รัน:
+- [ ] รัน (ใช้ `site_config.json` ตัวเดียวกับตอน seed — ต้องมีฟิลด์ `ip` ต่อกล้องด้วย):
 
 ```bash
-python scripts/check_time_sync.py
+python scripts/check_time_sync.py --config site_config.json --database-url "$DATABASE_URL"
 ```
 
 - [ ] **ทุกอุปกรณ์ต่างกัน < 2 วินาที** ถ้าไม่ผ่าน แก้ตาม `08-nvr-integration.md` หัวข้อ 7.3
+- [ ] ถ้าอุปกรณ์ไหนตอบ ERROR (ไม่ใช่แค่เกินเกณฑ์) — เช็คว่ารองรับ ONVIF จริงไหมก่อน (`--single <ip>` ทดสอบทีละตัว) กล้อง/NVR บางรุ่นอาจต้องเปิด ONVIF ในเมนูตั้งค่าก่อนถึงจะตอบ
 
 ### 6.3 ตรวจสมรรถนะ Frigate
 

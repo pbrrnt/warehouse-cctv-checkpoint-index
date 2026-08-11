@@ -411,12 +411,36 @@ html{ scroll-behavior:smooth; }
 <pre><code class="language-bash">docker compose config
 </code></pre>
 <ul>
-<li class="chk"><label><input type="checkbox"><span>สตาร์ตระบบ:</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>สตาร์ต<strong>เฉพาะ infrastructure ก่อน</strong> (frigate, mosquitto, postgres, redis — ยังไม่ใช่ indexer/api/web):</span></label></li>
 </ul>
 <pre><code class="language-bash">docker compose up -d
 </code></pre>
 <ul>
-<li class="chk"><label><input type="checkbox"><span>ดู log ว่าไม่มี error:</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>รอ postgres พร้อม (<code>docker compose ps</code> เห็น <code>healthy</code>) แล้ว<strong>สร้างตาราง</strong> (ยังไม่มีใครสร้างให้อัตโนมัติ):</span></label></li>
+</ul>
+<pre><code class="language-bash">pip install -r services/common/requirements.txt requests   # sqlalchemy/alembic/pgvector/psycopg + requests (check_time_sync.py) บนเครื่อง host
+cd db
+DATABASE_URL=&quot;postgresql+psycopg://&lt;user&gt;:&lt;pass&gt;@localhost:&lt;POSTGRES_PORT&gt;/&lt;db&gt;&quot; python -m alembic upgrade head
+cd ..
+</code></pre>
+<ul>
+<li class="chk"><label><input type="checkbox"><span><strong><span class="star">★</span> ห้ามข้าม — ใส่ข้อมูลไซต์+กล้องลง DB</strong> (ไม่มีขั้นนี้ = <code>worker.py</code> จะเจอ &quot;ไม่รู้จักกล้อง&quot; แล้วข้ามทุก event เงียบ ๆ ไม่มี error ให้เห็น ดูเหมือนระบบทำงานปกติทั้งที่ไม่มีข้อมูลออกมาเลย):</span></label></li>
+</ul>
+<pre><code class="language-bash">cp scripts/site_config.example.json site_config.json   # แก้ site/cameras ให้ตรงกับไซต์จริง (nvr_channel, zone_config ฯลฯ)
+python scripts/seed_site.py --config site_config.json --database-url &quot;postgresql+psycopg://&lt;user&gt;:&lt;pass&gt;@localhost:&lt;POSTGRES_PORT&gt;/&lt;db&gt;&quot;
+</code></pre>
+<ul>
+<li class="chk"><label><input type="checkbox"><span><strong>ดาวน์โหลดไฟล์โมเดล AI</strong> (ไม่ได้อยู่ใน git — ดู <code>docs/11-testing.md</code>):</span></label></li>
+</ul>
+<pre><code class="language-bash">python scripts/fetch_models.py
+</code></pre>
+<ul>
+<li class="chk"><label><input type="checkbox"><span>สตาร์ตระบบส่วนที่เหลือ (indexer, api, web) — <strong>ต้องมี <code>--profile app</code></strong> ไม่งั้นจะสตาร์ตแค่ infra เหมือนเดิม:</span></label></li>
+</ul>
+<pre><code class="language-bash">docker compose --profile app up -d
+</code></pre>
+<ul>
+<li class="chk"><label><input type="checkbox"><span>ดู log ว่าไม่มี error (ทั้ง Docker และไฟล์ที่อยู่ทนกว่าใน <code>${DATA_ROOT}/logs/</code> — ดู <code>07-operations.md</code> หัวข้อ 2.4):</span></label></li>
 </ul>
 <pre><code class="language-bash">docker compose logs -f --tail=100
 </code></pre>
@@ -433,12 +457,13 @@ html{ scroll-behavior:smooth; }
 </ul>
 <h3 id="6-2-ตรวจการซิงก์เวลา">6.2 <span class="star">★</span> ตรวจการซิงก์เวลา</h3>
 <ul>
-<li class="chk"><label><input type="checkbox"><span>รัน:</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>รัน (ใช้ <code>site_config.json</code> ตัวเดียวกับตอน seed — ต้องมีฟิลด์ <code>ip</code> ต่อกล้องด้วย):</span></label></li>
 </ul>
-<pre><code class="language-bash">python scripts/check_time_sync.py
+<pre><code class="language-bash">python scripts/check_time_sync.py --config site_config.json --database-url &quot;$DATABASE_URL&quot;
 </code></pre>
 <ul>
 <li class="chk"><label><input type="checkbox"><span><strong>ทุกอุปกรณ์ต่างกัน &lt; 2 วินาที</strong> ถ้าไม่ผ่าน แก้ตาม <code>08-nvr-integration.md</code> หัวข้อ 7.3</span></label></li>
+<li class="chk"><label><input type="checkbox"><span>ถ้าอุปกรณ์ไหนตอบ ERROR (ไม่ใช่แค่เกินเกณฑ์) — เช็คว่ารองรับ ONVIF จริงไหมก่อน (<code>--single &lt;ip&gt;</code> ทดสอบทีละตัว) กล้อง/NVR บางรุ่นอาจต้องเปิด ONVIF ในเมนูตั้งค่าก่อนถึงจะตอบ</span></label></li>
 </ul>
 <h3 id="6-3-ตรวจสมรรถนะ-frigate">6.3 ตรวจสมรรถนะ Frigate</h3>
 <ul>

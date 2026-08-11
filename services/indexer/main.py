@@ -20,13 +20,14 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from services.common.config import Settings
+from services.common.logging_config import setup_logging
 from services.common.storage import LocalFileStore
 from services.indexer.frigate_client import FrigateClient
 from services.indexer.mqtt_bridge import MqttBridge
 from services.indexer.stream_consumer import run_worker_loop
 from services.indexer.worker import EventWorker
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-8s %(name)s: %(message)s")
+setup_logging("indexer")
 logger = logging.getLogger(__name__)
 
 

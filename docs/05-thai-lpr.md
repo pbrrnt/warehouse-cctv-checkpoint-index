@@ -8,33 +8,32 @@
 ## 1. ภาพรวมท่อประมวลผล
 
 ```
-Frigate ตรวจพบ car / motorcycle
+Frigate ตรวจพบ car / motorcycle บนกล้อง role='lpr'
         │
         ▼
-1. ดึง snapshot ที่คมที่สุดของ track นั้นจาก Frigate API
+1. ดึงภาพครอปเฉพาะกรอบวัตถุจาก Frigate API (?crop=1)
         │
         ▼
-2. plate_detect.py — YOLO หาตำแหน่งป้ายในภาพรถ
+2. thai_ocr.py — PaddleOCR th_PP-OCRv5_mobile_rec + text detector ในตัว
+   (PP-OCRv5_mobile_det) หาตำแหน่ง+อ่านข้อความพร้อมกัน ไม่มี plate_detect.py
+   แยกต่างหาก (ดู ADR-021 ใน 00-decisions.md — อาศัยว่ากล้อง lpr ออกแบบ FOV
+   แคบ+ระยะควบคุมอยู่แล้วตาม 10-chokepoint-design.md ทำให้ป้ายเด่นในเฟรม)
         │
         ▼
-3. เตรียมภาพ: warp perspective ให้ป้ายตรง + CLAHE + upscale
-        │
-        ▼
-4. thai_ocr.py — PaddleOCR th_PP-OCRv5_mobile_rec (แยกอ่าน 2 บรรทัด)
-        │
-        ▼
-5. plate_normalize.py — ★ หัวใจของความแม่นยำ
+3. plate_normalize.py — ★ หัวใจของความแม่นยำ
         │  • แปลงเลขไทย → เลขอารบิก
         │  • แก้อักษรที่ OCR สับสน
         │  • ตรวจว่าเข้าเทมเพลตป้ายไทย
         │  • จับคู่ชื่อจังหวัดกับ gazetteer
         │
         ▼
-6. Majority vote รวมผลหลายเฟรมของ track เดียวกัน
-        │
-        ▼
-7. บันทึกลงตาราง plates (เก็บทั้ง raw_text และ plate_norm)
+4. บันทึกลงตาราง plates (เก็บทั้ง raw_text และ plate_norm)
 ```
+
+**ยังไม่ implement (ตัวเลือกถ้าความแม่นยำจริงไม่พอตอนขึ้นระบบ):**
+- เตรียมภาพก่อน OCR (warp perspective ให้ป้ายตรง, CLAHE, upscale)
+- Majority vote รวมผลหลายเฟรมของ track เดียวกัน (ตอนนี้ใช้ภาพครอปเดียวจาก Frigate ต่อ event)
+- `plate_detect.py` (YOLO หาตำแหน่งป้ายแยก) — ดู ADR-021
 
 ---
 
@@ -334,9 +333,9 @@ LIMIT 200;
 
 | ขั้นตอน | โมเดล | หมายเหตุ |
 |---|---|---|
-| ตรวจตำแหน่งป้าย | YOLOv8n fine-tune บน dataset ป้ายไทย | มีชุดข้อมูลสาธารณะบน Roboflow ใช้เป็นจุดเริ่ม |
+| ตรวจตำแหน่งป้าย | ไม่มีโมเดลแยก — ใช้ text detector ในตัว PaddleOCR (`PP-OCRv5_mobile_det`) | ดู ADR-021 — ถ้าไม่พอค่อยกลับมาทำ YOLOv8n fine-tune (มี dataset สาธารณะบน Roboflow เป็นจุดเริ่ม) |
 | OCR | `th_PP-OCRv5_mobile_rec` (PaddleOCR) | ความแม่นบนข้อความไทยทั่วไป ~82.7% — **ต้อง fine-tune ด้วยภาพป้ายจริง** |
-| Runtime | ONNX / OpenVINO บน iGPU Intel | |
+| Runtime | PaddlePaddle CPU (thai_ocr.py) / OpenVINO บน iGPU Intel (vehicle.py) | |
 
 ### 8.1 แผนการ fine-tune (เฟส 3)
 

@@ -156,7 +156,7 @@ def upgrade() -> None:
         sa.Column("detection_id", sa.BigInteger(), sa.ForeignKey("detections.id", ondelete="CASCADE"), primary_key=True),
         sa.Column("vehicle_type", sa.Text()),  # 'car' | 'van' | 'truck' | 'bus'
         sa.Column("color", sa.Text()),
-        sa.Column("embedding", Vector(256)),  # vehicle-reid-0001
+        sa.Column("embedding", Vector(512)),  # vehicle-reid-0001
         sa.Column("plate_id", sa.BigInteger(), sa.ForeignKey("plates.id", ondelete="SET NULL")),
     )
 

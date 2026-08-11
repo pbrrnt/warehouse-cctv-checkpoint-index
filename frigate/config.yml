@@ -66,11 +66,15 @@ semantic_search:
 #  ffmpeg — ค่าเริ่มต้นสำหรับทุกกล้อง
 # ------------------------------------------------------------
 ffmpeg:
-  # hardware acceleration ของ Intel — ปรับตามรุ่น CPU
+  # hardware acceleration ของ Intel — ปรับตามรุ่น CPU ผ่าน .env
+  # (FFMPEG_HWACCEL_PRESET) ห้ามแก้ค่านี้ตรง ๆ ในไฟล์นี้ — ไซต์ต่างกันมี CPU
+  # รุ่นต่างกัน ต้องปรับผ่าน .env เท่านั้นตามกฎ 09-multi-site-runbook.md
+  # ("ห้ามแก้โค้ดเฉพาะไซต์") ★ เดิมไฟล์นี้ hardcode ค่าไว้ตรง ๆ ทำให้ตัวแปร
+  # FFMPEG_HWACCEL_PRESET ใน .env ไม่มีผลอะไรเลย แก้แล้วให้อ่านจาก env จริง
   #   Gen 1-7                      -> preset-vaapi
   #   Gen 8-12                     -> preset-vaapi | preset-intel-qsv-h264
   #   Gen 13+ / Core Ultra / N100  -> preset-intel-qsv-h264
-  hwaccel_args: preset-intel-qsv-h264
+  hwaccel_args: "{FRIGATE_HWACCEL_PRESET}"
 
   # ★ ค่าที่จำเป็นสำหรับกล้องจีน:
   #   -rtsp_transport tcp  : UDP หลุดง่ายทำให้ภาพแตก

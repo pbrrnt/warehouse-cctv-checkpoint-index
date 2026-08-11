@@ -12,6 +12,7 @@ WORKDIR /app
 # ติดตั้ง dependency ก่อน copy โค้ด เพื่อให้ docker cache layer นี้ไว้ใช้ซ้ำ
 # ตอน rebuild ถ้าแก้แค่โค้ดแต่ requirements ไม่เปลี่ยน
 COPY common/requirements.txt services/common/requirements.txt
+COPY common/analytics/requirements.txt services/common/analytics/requirements.txt
 COPY indexer/requirements.txt services/indexer/requirements.txt
 RUN pip install --no-cache-dir -r services/indexer/requirements.txt
 

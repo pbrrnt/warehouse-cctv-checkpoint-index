@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="th">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ระบบดัชนีค้นหาภาพกล้องวงจรปิด</title>
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+    <header class="topbar">
+        <h1>ระบบดัชนีค้นหาภาพกล้องวงจรปิด</h1>
+        <span class="site-name" id="siteName">โกดังตัวอย่าง</span>
+        <span class="demo-badge" id="demoBadge" hidden>โหมดตัวอย่าง (ไม่มีข้อมูลจริง)</span>
+        <button class="key-btn" id="keySettingsBtn" title="ตั้งค่า API Key">🔑 API Key</button>
+    </header>
+
+    <div class="key-panel" id="keyPanel" hidden>
+        <label>API Key (ขอจากผู้ดูแลระบบ — ดู .env: API_SECRET_KEY)
+            <input type="password" id="keyInput" placeholder="วาง API Key ที่นี่" />
+        </label>
+        <button class="copy-btn" id="keySaveBtn">บันทึก</button>
+        <span class="key-status" id="keyStatus"></span>
+    </div>
+
+    <nav class="tabs">
+        <button class="tab-btn active" data-tab="search">ค้นหา</button>
+        <button class="tab-btn" data-tab="now">ตอนนี้ในโกดัง</button>
+        <button class="tab-btn" data-tab="registry">ทะเบียนที่รู้จัก</button>
+    </nav>
+
+    <main>
+        <!-- ========== แท็บค้นหา ========== -->
+        <section id="tab-search">
+            <div class="panel">
+                <div class="search-row">
+                    <input type="text" id="plateQuery" placeholder="พิมพ์ทะเบียนรถ เช่น 1กก1234 (พิมพ์ผิด 1-2 ตัวก็ยังค้นเจอ)" />
+                    <button class="search-btn" id="searchBtn">ค้นหา</button>
+                </div>
+
+                <div class="filters">
+                    <label>กล้อง
+                        <select id="filterCamera">
+                            <option value="">ทั้งหมด</option>
+                        </select>
+                    </label>
+                    <label>ประเภทรถ
+                        <select id="filterVehicleType">
+                            <option value="">ทั้งหมด</option>
+                            <option value="car">รถเก๋ง/กระบะ</option>
+                            <option value="truck">รถบรรทุก</option>
+                            <option value="bus">รถบัส</option>
+                            <option value="motorcycle">มอเตอร์ไซค์</option>
+                        </select>
+                    </label>
+                    <label>สีรถ
+                        <select id="filterColor">
+                            <option value="">ทั้งหมด</option>
+                            <option value="white">ขาว</option>
+                            <option value="black">ดำ</option>
+                            <option value="gray">เทา</option>
+                            <option value="red">แดง</option>
+                            <option value="blue">น้ำเงิน</option>
+                            <option value="green">เขียว</option>
+                            <option value="yellow">เหลือง</option>
+                        </select>
+                    </label>
+                    <label>ทิศทาง
+                        <select id="filterDirection">
+                            <option value="">ทั้งหมด</option>
+                            <option value="in">เข้า</option>
+                            <option value="out">ออก</option>
+                        </select>
+                    </label>
+                    <label>จากวันที่
+                        <input type="datetime-local" id="filterFrom" />
+                    </label>
+                    <label>ถึงวันที่
+                        <input type="datetime-local" id="filterTo" />
+                    </label>
+                </div>
+                <div class="hint">ค้นด้วยทะเบียนอย่างเดียวก็ได้ หรือใช้ตัวกรองช่วยแคบผลลัพธ์ลง</div>
+            </div>
+
+            <div class="result-count" id="searchResultCount"></div>
+            <div id="searchResults"></div>
+        </section>
+
+        <!-- ========== แท็บตอนนี้ในโกดัง ========== -->
+        <section id="tab-now" hidden>
+            <div class="panel">
+                <strong>รถที่เข้ามาแล้วยังไม่เห็นออก</strong> (ใน 24 ชั่วโมงล่าสุด)
+                <div class="hint">อิงจาก event ขาเข้า/ขาออกที่ตรวจจับได้ ถ้ากล้องพลาดจับตอนออกอาจค้างอยู่ในรายการนี้ผิดพลาดได้ — ใช้ประกอบการตัดสินใจ ไม่ใช่หลักฐานยืนยัน</div>
+            </div>
+            <div class="result-count" id="nowResultCount"></div>
+            <div id="nowResults"></div>
+        </section>
+
+        <!-- ========== แท็บทะเบียนที่รู้จัก ========== -->
+        <section id="tab-registry" hidden>
+            <div class="panel">
+                <strong>เพิ่ม/แก้ทะเบียนที่รู้จัก</strong>
+                <div class="hint">ติดป้ายชื่อรถที่มาบ่อย เช่น รถส่งของบริษัท ก. หรือรถลูกค้าประจำ — ไม่บังคับต้องมีทุกคัน แค่ช่วยให้จำได้เร็วตอนค้นหา</div>
+                <div class="registry-form">
+                    <label>ทะเบียน
+                        <input type="text" id="regPlate" placeholder="1กก1234" />
+                    </label>
+                    <label>ชื่อเจ้าของ/บริษัท
+                        <input type="text" id="regOwner" placeholder="รถส่งของบริษัท ก" />
+                    </label>
+                    <label>หมายเหตุ
+                        <input type="text" id="regNotes" placeholder="(ไม่บังคับ)" />
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="regWatch" />
+                        ตั้งเป็นรถเฝ้าระวัง
+                    </label>
+                    <button class="search-btn" id="regSaveBtn">บันทึก</button>
+                </div>
+            </div>
+
+            <div class="result-count" id="registryCount"></div>
+            <div id="registryList"></div>
+        </section>
+    </main>
+
+    <footer>ระบบนี้ช่วยหาว่าต้องไปเปิดกล้องช่องไหน เวลาไหน — ดูวิดีโอความละเอียดเต็มต่อจาก NVR เสมอ</footer>
+
+    <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,47 @@
+{
+  "site": {
+    "id": "WH01",
+    "name": "โกดังตัวอย่าง",
+    "timezone": "Asia/Bangkok",
+    "nvr_host": "192.168.1.10",
+    "nvr_vendor": "dahua"
+  },
+  "cameras": [
+    {
+      "id": "WH01-GATE-LPR",
+      "name": "ประตูใหญ่ - อ่านป้าย",
+      "tier": "A",
+      "role": "lpr",
+      "location": "ประตูใหญ่ ฝั่งขาเข้า",
+      "vendor": "dahua",
+      "ip": "192.168.1.51",
+      "nvr_channel": 3,
+      "zone_config": {"outside_zone": "gate_outside", "inside_zone": "gate_inside"},
+      "clock_offset_ms": 0
+    },
+    {
+      "id": "WH01-GATE-OVERVIEW",
+      "name": "ประตูใหญ่ - ภาพรวม",
+      "tier": "A",
+      "role": "overview",
+      "location": "ประตูใหญ่ มุมกว้าง",
+      "vendor": "dahua",
+      "ip": "192.168.1.52",
+      "nvr_channel": 4,
+      "zone_config": {"outside_zone": "gate_outside", "inside_zone": "gate_inside"},
+      "clock_offset_ms": 0
+    },
+    {
+      "id": "WH01-DOOR-FACE",
+      "name": "ประตูคน",
+      "tier": "A",
+      "role": "face",
+      "location": "ประตูทางเข้าพนักงาน",
+      "vendor": "dahua",
+      "ip": "192.168.1.53",
+      "nvr_channel": 7,
+      "zone_config": {"outside_zone": "door_outside", "inside_zone": "door_inside"},
+      "clock_offset_ms": 0
+    }
+  ]
+}

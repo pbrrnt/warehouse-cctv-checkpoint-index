@@ -13,8 +13,14 @@ import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 
+import cv2
+import numpy as np
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from services.common.analytics.thai_ocr import OcrResult  # noqa: E402
+from services.common.analytics.vehicle import VehicleAttrs, VehicleResult  # noqa: E402
+from services.common.db.models import CameraRole  # noqa: E402
 from services.common.storage import LocalFileStore  # noqa: E402
 from services.indexer.frigate_events import (  # noqa: E402
     compute_direction,
@@ -352,21 +358,47 @@ class TestEnsureConsumerGroup(unittest.TestCase):
 # ============================================================
 
 class _FakeCamera:
-    def __init__(self, zone_config):
+    def __init__(self, zone_config, role=None):
         self.zone_config = zone_config
+        self.role = role
+
+
+class _FakeScalarResult:
+    def __init__(self, value):
+        self._value = value
+
+    def scalar_one_or_none(self):
+        return self._value
 
 
 class _FakeSession:
-    def __init__(self, camera=None):
+    def __init__(self, camera=None, existing_detection_id=None):
         self._camera = camera
+        # query เช็ก idempotency ของ _process_vehicle/_process_plate คืนค่านี้
+        # — ตั้งเป็นไม่ None เพื่อจำลอง "แถวนี้มีอยู่แล้ว (redelivery ซ้ำ)"
+        # (เทสต์แต่ละเคสเช็กแค่ทีละ kind เลยไม่ต้องแยกตาม vehicle/plate)
+        self._existing_detection_id = existing_detection_id
         self.executed = []
+        self.added = []
         self.committed = False
+        self._next_id = 1
 
     def get(self, model, camera_id):
         return self._camera
 
     def execute(self, stmt):
         self.executed.append(stmt)
+        return _FakeScalarResult(self._existing_detection_id)
+
+    def add(self, obj):
+        self.added.append(obj)
+
+    def flush(self):
+        # จำลอง autoincrement PK ที่ DB จริงจะให้หลัง flush/insert
+        for obj in self.added:
+            if getattr(obj, "id", None) is None:
+                obj.id = self._next_id
+                self._next_id += 1
 
     def commit(self):
         self.committed = True
@@ -389,17 +421,26 @@ class _FakeSessionFactory:
 
 
 class _FakeFrigateClient:
-    def __init__(self, snapshot=b"fake-jpeg", raise_error=False):
+    def __init__(self, snapshot=b"fake-jpeg", raise_error=False, raise_error_on_crop=None):
         self.snapshot = snapshot
         self.raise_error = raise_error
-        self.requested_ids = []
+        # เผื่อเทสต์ที่อยากให้ full snapshot สำเร็จแต่ crop snapshot ล้มเหลว
+        # เท่านั้น (หรือกลับกัน) — ถ้าไม่ตั้งจะใช้ค่า raise_error เดิมทั้งคู่
+        self.raise_error_on_crop = raise_error if raise_error_on_crop is None else raise_error_on_crop
+        self.requested = []  # list ของ (event_id, crop)
 
-    def get_snapshot(self, event_id):
-        self.requested_ids.append(event_id)
-        if self.raise_error:
+    def get_snapshot(self, event_id, crop=False):
+        self.requested.append((event_id, crop))
+        should_raise = self.raise_error_on_crop if crop else self.raise_error
+        if should_raise:
             from services.indexer.frigate_client import FrigateClientError
             raise FrigateClientError("จำลอง Frigate ไม่ตอบสนอง")
         return self.snapshot
+
+    @property
+    def requested_ids(self):
+        # ★ เข้ากันได้กับเทสต์เดิมที่เช็ก requested_ids ก่อนมี crop param
+        return [event_id for event_id, _crop in self.requested]
 
 
 class _FakeStore:
@@ -411,28 +452,125 @@ class _FakeStore:
         return key
 
 
+def _tiny_jpeg_bytes() -> bytes:
+    """ภาพ JPEG เล็ก ๆ ที่ decode ได้จริง — ใช้แทน 'fake-jpeg' bytes ธรรมดา
+    ตอนเทสต์ทางเดินที่ต้องผ่าน cv2.imdecode ใน _process_vehicle"""
+    ok, buf = cv2.imencode(".jpg", np.zeros((20, 20, 3), dtype=np.uint8))
+    assert ok
+    return buf.tobytes()
+
+
+def _fake_vehicle_result() -> VehicleResult:
+    return VehicleResult(
+        attrs=VehicleAttrs(vehicle_type="car", type_conf=0.9, color="white", color_conf=0.8),
+        embedding=[0.1, 0.2, 0.3],
+    )
+
+
 class TestEventWorkerProcess(unittest.TestCase):
-    def _parsed(self, entered_zones=None):
+    def _parsed(self, entered_zones=None, label="car"):
         payload = _sample_payload(
             camera="WH01_GATE_LPR",
             entered_zones=entered_zones or ["gate_outside", "gate_inside"],
+            label=label,
         )
         return parse_frigate_event(payload)
 
     def test_known_camera_full_happy_path(self):
-        camera = _FakeCamera(zone_config={"outside_zone": "gate_outside", "inside_zone": "gate_inside"})
+        camera = _FakeCamera(
+            zone_config={"outside_zone": "gate_outside", "inside_zone": "gate_inside"},
+            role=CameraRole.overview,
+        )
         session = _FakeSession(camera=camera)
-        frigate_client = _FakeFrigateClient()
+        frigate_client = _FakeFrigateClient(snapshot=_tiny_jpeg_bytes())
         store = _FakeStore()
 
-        worker = EventWorker(_FakeSessionFactory(session), frigate_client, store, site_id="WH01")
+        worker = EventWorker(
+            _FakeSessionFactory(session), frigate_client, store, site_id="WH01",
+            vehicle_analyzer=lambda image: _fake_vehicle_result(),
+        )
         worker.process(self._parsed())
 
-        # snapshot ถูกดึงและบันทึกจริง
-        self.assertEqual(len(frigate_client.requested_ids), 1)
-        self.assertEqual(len(store.saved), 1)
-        # upsert ถูกเรียก (execute) และ commit
-        self.assertEqual(len(session.executed), 1)
+        # snapshot ถูกดึง 2 ครั้ง — ทั้งเฟรม (thumb_key) + ครอปรถ (AI)
+        self.assertEqual(frigate_client.requested, [("1699999999.123456-abcdef", False), ("1699999999.123456-abcdef", True)])
+        self.assertEqual(len(store.saved), 1)  # เก็บแค่ภาพทั้งเฟรมลง store ไม่เก็บภาพครอป
+        # execute: 1) upsert event  2) idempotency check ก่อนเขียน vehicle detection
+        self.assertEqual(len(session.executed), 2)
+        # add: Detection(kind=vehicle) + Vehicle
+        self.assertEqual(len(session.added), 2)
+        detection, vehicle = session.added
+        self.assertEqual(detection.kind.value, "vehicle")
+        self.assertEqual(vehicle.detection_id, detection.id)
+        self.assertEqual(vehicle.vehicle_type, "car")
+        self.assertEqual(vehicle.color, "white")
+        self.assertEqual(vehicle.embedding, [0.1, 0.2, 0.3])
+        self.assertTrue(session.committed)
+
+    def test_non_vehicle_label_skips_vehicle_processing(self):
+        # label='person' ไม่อยู่ใน VEHICLE_LABELS — ไม่ควรพยายามวิเคราะห์รถเลย
+        camera = _FakeCamera(zone_config={})
+        session = _FakeSession(camera=camera)
+        frigate_client = _FakeFrigateClient(snapshot=_tiny_jpeg_bytes())
+        store = _FakeStore()
+
+        worker = EventWorker(
+            _FakeSessionFactory(session), frigate_client, store, site_id="WH01",
+            vehicle_analyzer=lambda image: _fake_vehicle_result(),
+        )
+        worker.process(self._parsed(label="person"))
+
+        self.assertEqual(frigate_client.requested, [("1699999999.123456-abcdef", False)])  # ดึงแค่ thumb
+        self.assertEqual(len(session.executed), 1)  # แค่ upsert event ไม่มี idempotency check
+        self.assertEqual(len(session.added), 0)
+
+    def test_vehicle_already_recorded_skips_duplicate_insert(self):
+        # ★ จำลอง redelivery ซ้ำจาก Redis Stream — ต้องไม่เขียนแถวซ้ำ
+        camera = _FakeCamera(zone_config={}, role=CameraRole.overview)
+        session = _FakeSession(camera=camera, existing_detection_id=42)
+        frigate_client = _FakeFrigateClient(snapshot=_tiny_jpeg_bytes())
+        store = _FakeStore()
+
+        worker = EventWorker(
+            _FakeSessionFactory(session), frigate_client, store, site_id="WH01",
+            vehicle_analyzer=lambda image: _fake_vehicle_result(),
+        )
+        worker.process(self._parsed())
+
+        self.assertEqual(frigate_client.requested, [("1699999999.123456-abcdef", False)])  # ไม่ควรไปดึงภาพครอปเลย
+        self.assertEqual(len(session.added), 0)
+
+    def test_vehicle_crop_decode_failure_does_not_crash(self):
+        # snapshot ปลอมที่ decode ไม่ได้ (ไม่ใช่ jpeg จริง) — ต้อง skip เงียบ ๆ
+        camera = _FakeCamera(zone_config={}, role=CameraRole.overview)
+        session = _FakeSession(camera=camera)
+        frigate_client = _FakeFrigateClient(snapshot=b"not-a-real-jpeg")
+        store = _FakeStore()
+
+        worker = EventWorker(
+            _FakeSessionFactory(session), frigate_client, store, site_id="WH01",
+            vehicle_analyzer=lambda image: _fake_vehicle_result(),
+        )
+        worker.process(self._parsed())  # ต้องไม่ raise
+
+        self.assertEqual(len(session.added), 0)
+        self.assertTrue(session.committed)  # event metadata ยังบันทึกอยู่
+
+    def test_vehicle_analyzer_exception_does_not_crash(self):
+        camera = _FakeCamera(zone_config={}, role=CameraRole.overview)
+        session = _FakeSession(camera=camera)
+        frigate_client = _FakeFrigateClient(snapshot=_tiny_jpeg_bytes())
+        store = _FakeStore()
+
+        def _boom(image):
+            raise RuntimeError("จำลองโมเดล AI พัง")
+
+        worker = EventWorker(
+            _FakeSessionFactory(session), frigate_client, store, site_id="WH01",
+            vehicle_analyzer=_boom,
+        )
+        worker.process(self._parsed())  # ต้องไม่ raise
+
+        self.assertEqual(len(session.added), 0)
         self.assertTrue(session.committed)
 
     def test_unknown_camera_skipped_without_crash(self):
@@ -449,25 +587,152 @@ class TestEventWorkerProcess(unittest.TestCase):
         self.assertFalse(session.committed)
 
     def test_snapshot_fetch_failure_still_saves_metadata(self):
-        # ★ ดึง snapshot ไม่ได้ ไม่ควรทำให้ metadata หายไปด้วย
-        camera = _FakeCamera(zone_config={})
+        # ★ ดึง snapshot ไม่ได้ (ทั้งเฟรมและครอป) ไม่ควรทำให้ metadata หายไปด้วย
+        camera = _FakeCamera(zone_config={}, role=CameraRole.overview)
         session = _FakeSession(camera=camera)
         frigate_client = _FakeFrigateClient(raise_error=True)
         store = _FakeStore()
 
-        worker = EventWorker(_FakeSessionFactory(session), frigate_client, store, site_id="WH01")
+        worker = EventWorker(
+            _FakeSessionFactory(session), frigate_client, store, site_id="WH01",
+            vehicle_analyzer=lambda image: _fake_vehicle_result(),  # ไม่ควรถูกเรียกเลย
+        )
         worker.process(self._parsed())
 
         self.assertEqual(len(store.saved), 0)  # ไม่มีอะไรให้บันทึก
-        self.assertEqual(len(session.executed), 1)  # แต่ event row ยังถูกเขียน
+        # execute: 1) upsert event  2) idempotency check (เช็กก่อนถึงจะไปดึง
+        # ภาพครอป ซึ่งพังตรงนั้น) — ไม่มีการ add Detection/Vehicle เลย
+        self.assertEqual(len(session.executed), 2)
+        self.assertEqual(len(session.added), 0)
+        self.assertTrue(session.committed)  # event row ยังถูกเขียน
+
+    # ------------------------------------------------------
+    #  role='lpr' -> _process_plate (อ่านป้ายตรง ไม่มี plate_detect.py แยก)
+    # ------------------------------------------------------
+
+    def test_lpr_camera_full_happy_path(self):
+        camera = _FakeCamera(zone_config={}, role=CameraRole.lpr)
+        session = _FakeSession(camera=camera)
+        frigate_client = _FakeFrigateClient(snapshot=_tiny_jpeg_bytes())
+        store = _FakeStore()
+
+        fake_ocr = OcrResult(
+            lines=["1กก 1234", "กรุงเทพมหานคร"],
+            char_confs=[0.95] * 12,
+            ocr_conf=0.95,
+            box_count=2,
+        )
+        worker = EventWorker(
+            _FakeSessionFactory(session), frigate_client, store, site_id="WH01",
+            plate_reader=lambda image: fake_ocr,
+        )
+        worker.process(self._parsed())
+
+        self.assertEqual(frigate_client.requested, [("1699999999.123456-abcdef", False), ("1699999999.123456-abcdef", True)])
+        self.assertEqual(len(session.executed), 2)  # upsert event + idempotency check
+        self.assertEqual(len(session.added), 2)  # Detection(kind=plate) + Plate
+        detection, plate = session.added
+        self.assertEqual(detection.kind.value, "plate")
+        self.assertEqual(plate.detection_id, detection.id)
+        self.assertEqual(plate.plate_norm, "1กก1234")
+        self.assertEqual(plate.province, "กรุงเทพมหานคร")
+        self.assertTrue(session.committed)
+
+    def test_overview_camera_does_not_run_plate_ocr(self):
+        # ★ เช็กสลับด้าน — กล้อง overview ต้องไม่ไปเรียก plate_reader
+        camera = _FakeCamera(zone_config={}, role=CameraRole.overview)
+        session = _FakeSession(camera=camera)
+        frigate_client = _FakeFrigateClient(snapshot=_tiny_jpeg_bytes())
+        store = _FakeStore()
+
+        def _should_not_be_called(image):
+            raise AssertionError("ไม่ควรเรียก plate_reader ตอนกล้อง role=overview")
+
+        worker = EventWorker(
+            _FakeSessionFactory(session), frigate_client, store, site_id="WH01",
+            vehicle_analyzer=lambda image: _fake_vehicle_result(),
+            plate_reader=_should_not_be_called,
+        )
+        worker.process(self._parsed())  # ต้องไม่ raise (พิสูจน์ว่าไม่ถูกเรียก)
+
+    def test_lpr_camera_does_not_run_vehicle_analysis(self):
+        # ★ เช็กสลับด้าน — กล้อง lpr ต้องไม่ไปเรียก vehicle_analyzer
+        camera = _FakeCamera(zone_config={}, role=CameraRole.lpr)
+        session = _FakeSession(camera=camera)
+        frigate_client = _FakeFrigateClient(snapshot=_tiny_jpeg_bytes())
+        store = _FakeStore()
+
+        def _should_not_be_called(image):
+            raise AssertionError("ไม่ควรเรียก vehicle_analyzer ตอนกล้อง role=lpr")
+
+        worker = EventWorker(
+            _FakeSessionFactory(session), frigate_client, store, site_id="WH01",
+            vehicle_analyzer=_should_not_be_called,
+            plate_reader=lambda image: OcrResult(lines=[], char_confs=[], ocr_conf=0.0, box_count=0),
+        )
+        worker.process(self._parsed())  # ต้องไม่ raise
+
+    def test_plate_already_recorded_skips_duplicate_insert(self):
+        camera = _FakeCamera(zone_config={}, role=CameraRole.lpr)
+        session = _FakeSession(camera=camera, existing_detection_id=99)
+        frigate_client = _FakeFrigateClient(snapshot=_tiny_jpeg_bytes())
+        store = _FakeStore()
+
+        worker = EventWorker(
+            _FakeSessionFactory(session), frigate_client, store, site_id="WH01",
+            plate_reader=lambda image: OcrResult(lines=["1กก 1234"], char_confs=[], ocr_conf=0.9, box_count=1),
+        )
+        worker.process(self._parsed())
+
+        self.assertEqual(frigate_client.requested, [("1699999999.123456-abcdef", False)])  # ไม่ควรไปดึงภาพครอปเลย
+        self.assertEqual(len(session.added), 0)
+
+    def test_plate_no_text_detected_saves_nothing(self):
+        # ★ ไม่เจอข้อความเลยในภาพครอป (มุม/แสงไม่ดี) — ไม่ใช่ error แค่ไม่มี
+        # อะไรให้บันทึก ไม่ควร insert แถวว่างเปล่า
+        camera = _FakeCamera(zone_config={}, role=CameraRole.lpr)
+        session = _FakeSession(camera=camera)
+        frigate_client = _FakeFrigateClient(snapshot=_tiny_jpeg_bytes())
+        store = _FakeStore()
+
+        worker = EventWorker(
+            _FakeSessionFactory(session), frigate_client, store, site_id="WH01",
+            plate_reader=lambda image: OcrResult(lines=[], char_confs=[], ocr_conf=0.0, box_count=0),
+        )
+        worker.process(self._parsed())
+
+        self.assertEqual(len(session.added), 0)
+        self.assertTrue(session.committed)
+
+    def test_plate_reader_exception_does_not_crash(self):
+        camera = _FakeCamera(zone_config={}, role=CameraRole.lpr)
+        session = _FakeSession(camera=camera)
+        frigate_client = _FakeFrigateClient(snapshot=_tiny_jpeg_bytes())
+        store = _FakeStore()
+
+        def _boom(image):
+            raise RuntimeError("จำลอง PaddleOCR พัง")
+
+        worker = EventWorker(
+            _FakeSessionFactory(session), frigate_client, store, site_id="WH01",
+            plate_reader=_boom,
+        )
+        worker.process(self._parsed())  # ต้องไม่ raise
+
+        self.assertEqual(len(session.added), 0)
         self.assertTrue(session.committed)
 
     def test_camera_without_zone_config_direction_is_none(self):
         camera = _FakeCamera(zone_config=None)
         session = _FakeSession(camera=camera)
-        worker = EventWorker(_FakeSessionFactory(session), _FakeFrigateClient(), _FakeStore(), site_id="WH01")
+        worker = EventWorker(
+            _FakeSessionFactory(session), _FakeFrigateClient(), _FakeStore(), site_id="WH01",
+            vehicle_analyzer=lambda image: _fake_vehicle_result(),
+        )
 
-        # ไม่ควร crash แม้ zone_config เป็น None (ยังไม่ได้ตั้งค่า)
+        # ไม่ควร crash แม้ zone_config เป็น None (ยังไม่ได้ตั้งค่า) — snapshot
+        # ปลอมเริ่มต้นไม่ใช่ jpeg จริงด้วย เลย decode ไม่ผ่านใน _process_vehicle
+        # แต่ก็ยังไม่ควร crash
         worker.process(self._parsed())
         self.assertTrue(session.committed)
 

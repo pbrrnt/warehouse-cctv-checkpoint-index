@@ -66,9 +66,34 @@ ORDER BY 1, 2;
 
 ระบบอยู่ในวง LAN ที่อาจไม่มีอินเทอร์เน็ต จึงควรมีหลายชั้น:
 
-1. **หน้า dashboard ในระบบ** แสดงสถานะสุขภาพ (ชั้นพื้นฐาน)
-2. **อีเมล/LINE Notify** ถ้าไซต์มีอินเทอร์เน็ต
-3. **ไฟล์ log** ที่ช่างเข้าไปดูได้ตอนไปหน้างาน
+1. **หน้า dashboard ในระบบ** แสดงสถานะสุขภาพ (ชั้นพื้นฐาน — ยังไม่ได้ทำ)
+2. **อีเมล/LINE Notify** ถ้าไซต์มีอินเทอร์เน็ต (ยังไม่ได้ทำ)
+3. **ไฟล์ log** ที่ช่างเข้าไปดูได้ตอนไปหน้างาน — ดูหัวข้อ 2.4
+
+### 2.4 ไฟล์ log — ดูตอน error/พฤติกรรมแปลก ๆ
+
+`indexer` และ `api` เขียน log ทั้งไปที่ stdout (Docker เก็บผ่าน `json-file`
+driver — หมุนที่ 10MB × 3 ไฟล์ หายไปถ้า container ถูกลบ/สร้างใหม่) **และ**
+ไฟล์ที่อยู่ทนกว่าแยกจากอายุ container (`services/common/logging_config.py`,
+mount ผ่าน `${DATA_ROOT}/logs` — หมุนที่ 10MB × 5 ไฟล์ต่อ service):
+
+```bash
+# ดู log สด — จาก host (ไม่ต้องเข้า container)
+tail -f ${DATA_ROOT}/logs/indexer.log
+tail -f ${DATA_ROOT}/logs/api.log
+
+# หรือผ่าน docker compose (เห็นเฉพาะที่ container ยังไม่ถูกลบ)
+docker compose logs -f indexer
+docker compose logs -f api
+
+# หา error ย้อนหลัง
+grep -i error ${DATA_ROOT}/logs/indexer.log
+```
+
+**★ ใช้ไฟล์ (`${DATA_ROOT}/logs/`) เป็นหลักเวลาต้องสืบย้อนหลังหลังจาก
+redeploy/restart** เพราะ `docker compose logs` เห็นแค่ log ของ container
+ปัจจุบัน ถ้า `down` แล้ว `up` ใหม่ log เก่าใน Docker หายไปแล้ว แต่ไฟล์ใน
+`${DATA_ROOT}/logs/` ยังอยู่
 
 ---
 

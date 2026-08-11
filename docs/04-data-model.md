@@ -133,7 +133,7 @@ CREATE TABLE vehicles (
     detection_id BIGINT PRIMARY KEY REFERENCES detections(id) ON DELETE CASCADE,
     vehicle_type TEXT,                          -- 'car' | 'van' | 'truck' | 'bus'
     color        TEXT,                          -- 'white' | 'black' | ...
-    embedding    VECTOR(256),                   -- vehicle-reid-0001
+    embedding    VECTOR(512),                   -- vehicle-reid-0001
     plate_id     BIGINT REFERENCES plates(id) ON DELETE SET NULL
 );
 ```

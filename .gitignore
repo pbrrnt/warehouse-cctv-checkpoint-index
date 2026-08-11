@@ -3,6 +3,12 @@
 .env.*
 !.env.example
 
+# ★ ข้อมูลเฉพาะไซต์ (IP กล้อง, ช่อง NVR ฯลฯ) — ห้ามผูกกับไซต์ใดไซต์หนึ่งใน
+# git (ดู 09-multi-site-runbook.md: "ห้ามแก้โค้ดเฉพาะไซต์") เก็บ config
+# จริงของแต่ละไซต์ไว้เองนอก git แทน — scripts/site_config.example.json
+# (คนละชื่อไฟล์) ยัง track ปกติ ไม่โดนกฎนี้
+site_config.json
+
 # ★ ห้าม commit — ผลลัพธ์จาก probe_cameras.py มักมี user/password กล้องฝัง
 # อยู่ใน URL ที่ log ไว้ (เจอเคสจริงจากการสำรวจหน้าร้าน) เก็บไว้ดูเองได้
 # แต่ห้ามหลุดเข้า git — รวมทั้ง CSV ดิบและ HTML ที่ build_csv_html.py สร้างจาก
