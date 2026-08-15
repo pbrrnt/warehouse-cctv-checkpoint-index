@@ -250,6 +250,16 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    # ★ ใช้ python เช็คเอง ไม่ใช้ curl — python:3.11-slim (base image ของ
+    #   services/api/Dockerfile) ไม่มี curl ติดมาให้ ต่างจาก image ของ frigate
+    #   ด้านบน ถ้าใช้ curl ตรงนี้ healthcheck จะ fail ตลอด (ไม่มีคำสั่งให้รัน)
+    #   กลายเป็น "unhealthy" ทั้งที่ตัว service ทำงานปกติดี
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health', timeout=3).status == 200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     logging:
       driver: json-file
       options:
@@ -271,7 +281,8 @@ services:
     ports:
       - "${WEB_PORT}:80"
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     logging:
       driver: json-file
       options:
