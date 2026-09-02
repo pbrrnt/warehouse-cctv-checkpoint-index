@@ -11,10 +11,9 @@ schema" (to_*) เพื่อทดสอบทั้งคู่ได้โ�
 pg_trgm operator '%' และ DISTINCT ON ที่ SQLAlchemy สร้างให้ ต้องพิสูจน์ตอน
 ขึ้นระบบจริง
 
-★ vehicles.plate_id ยังไม่มีโค้ดไหนเซ็ตค่าจริง (services/indexer/worker.py
-ยังไม่ correlate event ของกล้อง overview กับ lpr ข้ามกล้อง/ข้าม Frigate
-event id — ยังไม่ได้ออกแบบ) VehicleSearchResult.plate_norm จะเป็น None
-เสมอในตอนนี้
+★ vehicles.plate_id เซ็ตโดย scripts/link_vehicle_plates.py (pass แยกรันเป็น
+ระยะ ดู ADR-024) ไม่ใช่ worker.py — VehicleSearchResult.plate_norm จะมีค่า
+เฉพาะรถที่จับคู่กับป้ายได้แบบไม่กำกวม (1:1) ที่เหลือเป็น None (ปกติ ไม่ใช่บั๊ก)
 """
 
 from __future__ import annotations

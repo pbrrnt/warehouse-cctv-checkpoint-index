@@ -260,6 +260,21 @@ class TestAppRoutes(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json()["site_id"], "WH01")
 
+    def test_cameras_requires_auth(self):
+        client = self._client()
+        resp = client.get("/cameras")
+        self.assertEqual(resp.status_code, 401)
+
+    def test_cameras_returns_list(self):
+        cam = Camera(id="WH01-GATE-LPR", site_id="WH01", name="ประตูใหญ่", tier="A", nvr_channel=3, clock_offset_ms=0, enabled=True)
+        client = self._client(rows=[cam])
+        resp = client.get("/cameras", headers={"X-API-Key": "test-secret-key"})
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertEqual(len(body), 1)
+        self.assertEqual(body[0]["id"], "WH01-GATE-LPR")
+        self.assertEqual(body[0]["nvr_channel"], 3)
+
     def test_search_plates_without_key_rejected(self):
         client = self._client()
         resp = client.get("/search/plates", params={"q": "1กก1234"})

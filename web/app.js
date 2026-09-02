@@ -412,6 +412,29 @@ function switchTab(name) {
 }
 
 // ============================================================
+//  เติม dropdown กล้อง จาก GET /cameras (โหมดตัวอย่างใช้ DEMO_CAMERAS)
+// ============================================================
+
+async function loadCameras() {
+    let cameras;
+    try {
+        cameras = await apiGet("/cameras", {});
+    } catch (e) {
+        showDemoBadge();
+        cameras = Object.values(DEMO_CAMERAS);
+    }
+    const select = document.getElementById("filterCamera");
+    // เก็บ option "ทั้งหมด" ไว้ ลบเฉพาะที่เติมเข้ามา
+    select.length = 1;
+    for (const cam of cameras) {
+        const opt = document.createElement("option");
+        opt.value = cam.id;
+        opt.textContent = cam.nvr_channel != null ? `${cam.name} (ช่อง ${cam.nvr_channel})` : cam.name;
+        select.appendChild(opt);
+    }
+}
+
+// ============================================================
 //  wire up
 // ============================================================
 
@@ -427,4 +450,5 @@ document.getElementById("keySettingsBtn").addEventListener("click", toggleKeyPan
 document.getElementById("keySaveBtn").addEventListener("click", saveApiKey);
 
 // เปิดหน้ามาแสดงตัวอย่างผลค้นหาเลย (ไม่บังคับให้พิมพ์ก่อนถึงจะเห็นหน้าตา UI)
+loadCameras();
 runSearch();

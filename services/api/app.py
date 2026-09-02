@@ -18,6 +18,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from services.api.auth import require_api_key
@@ -28,7 +29,8 @@ from services.api.registry import (
     normalize_registry_plate,
     upsert_registry_entry,
 )
-from services.api.schemas import NowEntry, PlateSearchResult, RegistryEntry, RegistryUpsertRequest, VehicleSearchResult
+from services.api.schemas import CameraInfo, NowEntry, PlateSearchResult, RegistryEntry, RegistryUpsertRequest, VehicleSearchResult
+from services.common.db.models import Camera
 from services.api.search import (
     build_now_query,
     build_plate_fuzzy_query,
@@ -59,6 +61,21 @@ def create_app(settings: Settings, session_factory: sessionmaker) -> FastAPI:
     @app.get("/health")
     def health():
         return {"status": "ok", "site_id": settings.site_id}
+
+    @app.get(
+        "/cameras",
+        response_model=list[CameraInfo],
+        dependencies=[Depends(require_api_key)],
+    )
+    def list_cameras(db: Session = Depends(get_db)):
+        """รายชื่อกล้องของไซต์นี้ — web UI ใช้เติม dropdown ตัวกรองกล้อง
+        (เดิม dropdown มีแค่ 'ทั้งหมด' เพราะไม่มี endpoint นี้)"""
+        stmt = (
+            select(Camera)
+            .where(Camera.site_id == settings.site_id, Camera.enabled.is_(True))
+            .order_by(Camera.id)
+        )
+        return [CameraInfo(id=c.id, name=c.name, nvr_channel=c.nvr_channel) for c in db.execute(stmt).scalars()]
 
     @app.get(
         "/search/plates",

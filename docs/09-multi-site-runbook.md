@@ -254,6 +254,15 @@ python scripts/seed_site.py --config site_config.json --database-url "postgresql
 python scripts/fetch_models.py
 ```
 
+- [ ] **สร้าง self-signed cert สำหรับหน้าเว็บ** (ดู ADR-025) — ใส่ IP เครื่องในวง LAN + Tailscale hostname เป็น SAN ให้ครบ:
+
+```bash
+scripts/gen_selfsigned_cert.sh "$DATA_ROOT/certs" <ip-เครื่องใน-LAN> <tailscale-hostname>
+# ตัวอย่าง: scripts/gen_selfsigned_cert.sh /data/certs 192.168.1.20 wh01-index.tailXXXX.ts.net
+```
+
+- [ ] (แนะนำ) ติดตั้ง `$DATA_ROOT/certs/web.crt` เป็น trusted certificate ในเครื่อง 2-3 เครื่องที่เจ้าหน้าที่ใช้ค้นหาประจำ — ไม่งั้น browser จะขึ้นคำเตือน "ไม่ปลอดภัย" ทุกครั้ง (ปกติของ self-signed กดผ่านได้ แต่ติดตั้งครั้งเดียวจะไม่เตือนอีก)
+
 - [ ] สตาร์ตระบบส่วนที่เหลือ (indexer, api, web) — **ต้องมี `--profile app`** ไม่งั้นจะสตาร์ตแค่ infra เหมือนเดิม:
 
 ```bash

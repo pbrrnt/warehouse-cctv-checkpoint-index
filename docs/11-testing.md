@@ -21,6 +21,9 @@ python -m unittest tests.test_api -v
 python -m unittest tests.test_logging_config -v
 python -m unittest tests.test_seed_site -v
 python -m unittest tests.test_check_time_sync -v
+python -m unittest tests.test_retention_cleanup -v
+python -m unittest tests.test_link_vehicle_plates -v
+python -m unittest tests.test_find_orphans -v
 ```
 
 ## 2. ไฟล์เทสต์มีอะไรบ้าง
@@ -35,8 +38,11 @@ python -m unittest tests.test_check_time_sync -v
 | `tests/test_logging_config.py` | `setup_logging()` เขียน log ไปไฟล์ที่อยู่ทนได้จริง, สร้างโฟลเดอร์ให้เอง, ไม่ raise ถ้าเขียนไม่ได้ | ไม่ต้องมีอะไรเพิ่ม — **ระวังถ้าจะแก้ไฟล์นี้:** setup_logging() แก้ root logger (global) ต้อง snapshot/restore handlers ใน setUp/tearDown ไม่งั้นกวน test module อื่น (ดู docstring ในไฟล์เทสต์) |
 | `tests/test_seed_site.py` | `scripts/seed_site.py` — validate_config() (pure), seed() upsert site/camera (mock session ไม่ใช้ SQLite เพราะ Camera มี JSONB), ยืนยันว่า `site_config.example.json` เองผ่าน validate จริง | ไม่ต้องมีอะไรเพิ่ม |
 | `tests/test_check_time_sync.py` | `scripts/check_time_sync.py` — parse ONVIF SOAP response (รวม prefix คนละแบบ), คำนวณ offset หัก round-trip, จัดรูปแบบรายงาน+เกณฑ์ผ่าน/ไม่ผ่าน, อ่าน device list จาก config | ไม่ต้องมีอะไรเพิ่ม — **`query_onvif_time()` (ยิง HTTP จริง) ไม่มีเทสต์เลย** ไม่มีอุปกรณ์ ONVIF จริงให้ทดสอบตอนเขียน ใช้ `--single <ip>` ทดสอบเองตอนมีอุปกรณ์จริง |
+| `tests/test_retention_cleanup.py` | `scripts/retention_cleanup.py` — ลบไฟล์ก่อนแถว DB, ข้ามแถวถ้าลบไฟล์ไม่สำเร็จ (กัน orphan), dry-run ไม่แตะทั้งไฟล์และ DB (mock session+store เพราะ Event/Detection มี JSONB) | ไม่ต้องมีอะไรเพิ่ม |
+| `tests/test_link_vehicle_plates.py` | `scripts/link_vehicle_plates.py` — `match_vehicles_to_plates()` กฎ 1:1 ไม่กำกวม (ครบทุกเคส: กำกวมฝั่งรถ/ฝั่งป้าย, ขอบ window, camera_pairs ข้ามประตู), apply_matches (mock session) | ไม่ต้องมีอะไรเพิ่ม |
+| `tests/test_find_orphans.py` | `scripts/find_orphans.py` — find_orphans() (set logic 2 ทิศ), scan_disk_keys() เดินไฟล์จริงใน temp dir ยืนยัน normalize เป็น '/' (Windows/Linux), format_report | ไม่ต้องมีอะไรเพิ่ม |
 
-**สถานะล่าสุด (เช็คก่อนอ้างอิง — ไฟล์อาจเปลี่ยนหลังจากนี้):** รวม 174 เคส ผ่านหมด ใช้เวลา ~15-25 วินาที (ส่วนใหญ่หมดไปกับโหลดโมเดล PaddleOCR/OpenVINO ในกลุ่ม integration ครั้งแรก)
+**สถานะล่าสุด (เช็คก่อนอ้างอิง — ไฟล์อาจเปลี่ยนหลังจากนี้):** รวม 211 เคส ผ่านหมด ใช้เวลา ~15-30 วินาที (ส่วนใหญ่หมดไปกับโหลดโมเดล PaddleOCR/OpenVINO ในกลุ่ม integration ครั้งแรก)
 
 ## 3. แต่ละไฟล์แบ่ง 2 กลุ่มเทสต์เสมอ (รูปแบบที่ใช้ซ้ำทุกโมดูล AI)
 

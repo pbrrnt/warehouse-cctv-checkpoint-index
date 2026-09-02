@@ -279,7 +279,12 @@ services:
     environment:
       TZ: ${TZ}
     ports:
-      - "${WEB_PORT}:80"
+      - "${WEB_HTTP_PORT}:80"    # redirect ไป https อย่างเดียว
+      - "${WEB_PORT}:443"        # HTTPS — พอร์ตหลักที่ผู้ใช้เข้า
+    volumes:
+      # ★ cert self-signed (สร้างด้วย scripts/gen_selfsigned_cert.sh ก่อน up)
+      #   ไม่ bake เข้า image เพราะเป็นความลับ + ต่างกันทุกไซต์ (ดู ADR-025)
+      - ${DATA_ROOT}/certs:/etc/nginx/certs:ro
     depends_on:
       api:
         condition: service_healthy

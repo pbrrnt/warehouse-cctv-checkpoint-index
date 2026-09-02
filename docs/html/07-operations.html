@@ -214,12 +214,21 @@ html{ scroll-behavior:smooth; }
 # ตรวจสุขภาพระบบ
 */15 * * * * /opt/cctv-index/scripts/cron/healthcheck.sh
 
+# จับคู่รถ↔ป้าย (vehicles.plate_id) — รันบ่อยหน่อยเพื่อให้ผลค้นหาสดพอควร (ดู ADR-024)
+*/10 * * * * /opt/cctv-index/scripts/cron/link_vehicle_plates.sh
+
 # จัดกลุ่มใบหน้า (เฟส 4 เป็นต้นไป)
 0 4 * * *   /opt/cctv-index/scripts/cron/cluster_faces.sh
 
-# ตรวจไฟล์กำพร้าในดิสก์ (รายสัปดาห์)
+# ตรวจไฟล์กำพร้าในดิสก์ (รายสัปดาห์ — รายงานอย่างเดียว ดูหัวข้อ 4.2)
 0 5 * * 0   /opt/cctv-index/scripts/cron/find_orphans.sh
 </code></pre>
+<blockquote>
+<p><code>find_orphans.sh</code> เรียก <code>python scripts/find_orphans.py --database-url &quot;$DATABASE_URL&quot; --media-path &quot;$MEDIA_PATH&quot;</code> (ไม่ใส่ <code>--delete-orphans</code> — รายงานอย่างเดียวตามค่าเริ่มต้น ให้คนตัดสินใจลบเอง)</p>
+</blockquote>
+<blockquote>
+<p><code>link_vehicle_plates.sh</code> เรียก <code>python scripts/link_vehicle_plates.py --database-url &quot;$DATABASE_URL&quot; --execute</code> (ดูวิธีจับคู่และข้อควรระวังเรื่อง window ใน ADR-024)</p>
+</blockquote>
 <hr />
 <h2 id="2-การเฝ้าระวัง">2. การเฝ้าระวัง</h2>
 <h3 id="2-1-ตัวชี้วัดที่ต้องดู">2.1 ตัวชี้วัดที่ต้องดู</h3>
@@ -378,20 +387,35 @@ find &quot;$BACKUP_DIR&quot; -name 'db-*.sql.gz' -mtime +$KEEP_DAYS -delete
 </ul>
 <hr />
 <h2 id="4-retention-และการลบข้อมูล">4. Retention และการลบข้อมูล</h2>
-<h3 id="4-1-ลำดับการลบที่ถูกต้อง">4.1 ลำดับการลบที่ถูกต้อง</h3>
-<pre><code>1. คิวรีหา crop_key / thumb_key ของแถวที่จะลบ  → เก็บไว้ในลิสต์
-2. ลบแถวใน events (CASCADE จะลบ detections/plates/embeddings ตาม)
-3. ลบไฟล์ตามลิสต์จากขั้นที่ 1
-4. บันทึกจำนวนที่ลบลง audit_log
+<p>ทำโดย <strong><code>scripts/retention_cleanup.py</code></strong> — ตั้ง cron รายวัน (แทนที่ <code>apply_retention.sh</code> ในตัวอย่าง crontab หัวข้อ 1 หรือให้ <code>apply_retention.sh</code> เรียกสคริปต์นี้ด้วย <code>--execute</code>)</p>
+<pre><code class="language-bash"># ดูก่อนว่าจะลบอะไรบ้าง (dry-run — ปลอดภัย ไม่แตะอะไรเลย)
+python scripts/retention_cleanup.py --database-url &quot;$DATABASE_URL&quot; --media-path /media
+
+# ลบจริง
+python scripts/retention_cleanup.py --database-url &quot;$DATABASE_URL&quot; --media-path /media --execute
 </code></pre>
-<p><strong>ห้ามสลับลำดับ</strong> — ถ้าลบแถวก่อนเก็บ key จะหาไฟล์ที่ต้องลบไม่เจอ และเหลือไฟล์กำพร้าสะสมจนดิสก์เต็ม</p>
+<h3 id="4-1-ลำดับการลบที่ถูกต้อง-ที่สคริปต์ทำจริง">4.1 ลำดับการลบที่ถูกต้อง (ที่สคริปต์ทำจริง)</h3>
+<pre><code>ต่อแถวที่จะลบ:
+1. ลบไฟล์ (crop_key / thumb_key) ผ่าน ContentStore ก่อน
+2. ถ้าลบไฟล์สำเร็จ → ค่อยลบแถว DB (event ใช้ CASCADE ลบ detections/plates/embeddings ตาม)
+3. ถ้าลบไฟล์ไม่สำเร็จ → ข้ามแถวนั้นไปก่อน ไม่ลบ DB (รอบหน้ารันใหม่จะ retry)
+สุดท้าย: บันทึกจำนวนที่ลบลง audit_log
+</code></pre>
+<p><strong>ทำไมลบไฟล์ก่อนแถว (ไม่ใช่แถวก่อนไฟล์)</strong> — ถ้า process ตายกลางคัน แถวใน DB จะยังชี้ไปหาไฟล์ที่ยังอยู่ (สถานะสอดคล้องกัน รอบหน้ารันใหม่ก็ลบต่อได้) ตรงข้ามกับลบแถวก่อน ที่ถ้าตายหลังลบแถวแต่ก่อนลบไฟล์ จะได้ไฟล์กำพร้าที่ไม่มีแถวอ้างถึงอีกเลย (หาไม่เจอ ลบไม่ได้ สะสมจนดิสก์เต็ม)</p>
+<p><strong>ลบใบหน้าก่อนเหตุการณ์ทั่วไป</strong> — retention ใบหน้าสั้นกว่า (เฟส 1 ลบ Detection(kind='face') ที่เกิน <code>RETENTION_FACE_EMBEDDINGS_DAYS</code> ก่อน แล้วเฟส 2 ค่อยลบ Event ทั้งแถวที่เกิน <code>RETENTION_EVENTS_DAYS</code>)</p>
 <h3 id="4-2-ตรวจไฟล์กำพร้า">4.2 ตรวจไฟล์กำพร้า</h3>
-<p>รันรายสัปดาห์ เทียบไฟล์ในดิสก์กับ key ใน DB แล้วรายงาน (ยังไม่ลบอัตโนมัติ ให้คนตัดสินใจก่อน)</p>
-<pre><code class="language-sql">-- key ทั้งหมดที่ควรมีไฟล์
-SELECT crop_key FROM detections WHERE crop_key IS NOT NULL
-UNION
-SELECT thumb_key FROM events WHERE thumb_key IS NOT NULL;
+<p>ทำโดย <strong><code>scripts/find_orphans.py</code></strong> — รันรายสัปดาห์ (cron) เทียบไฟล์บนดิสก์กับ key ที่ DB อ้างถึง รายงาน 2 ทิศทาง:</p>
+<ul>
+<li><strong>ไฟล์กำพร้า</strong> (มีบนดิสก์ ไม่มีใน DB) — กินพื้นที่เปล่า ลบได้</li>
+<li><strong>ไฟล์หาย</strong> (มีใน DB ไม่มีบนดิสก์) — ร้ายแรงกว่า ผลค้นหาที่ชี้ไปหาไฟล์เหล่านี้จะเปิดภาพไม่ได้</li>
+</ul>
+<pre><code class="language-bash"># รายงานอย่างเดียว (ค่าเริ่มต้น — ไม่ลบ)
+python scripts/find_orphans.py --database-url &quot;$DATABASE_URL&quot; --media-path /media
+
+# ลบไฟล์กำพร้าจริง (หลังคนดูรายงานแล้วตัดสินใจ)
+python scripts/find_orphans.py --database-url &quot;$DATABASE_URL&quot; --media-path /media --delete-orphans
 </code></pre>
+<p><strong>ค่าเริ่มต้นรายงานอย่างเดียว ไม่ลบ</strong> — ให้คนดูก่อนว่าไฟล์กำพร้าที่เจอสมเหตุสมผลไหม (เช่นถ้าเจอกำพร้าเยอะผิดปกติ อาจแปลว่า retention มีบั๊ก) แล้วค่อยสั่ง <code>--delete-orphans</code> เอง (สคริปต์ลบเฉพาะไฟล์กำพร้า ไม่ยุ่งกับไฟล์หาย)</p>
 <hr />
 <h2 id="5-การอัปเดตระบบ">5. การอัปเดตระบบ</h2>
 <h3 id="5-1-หลักการสำหรับหลายไซต์">5.1 หลักการสำหรับหลายไซต์</h3>

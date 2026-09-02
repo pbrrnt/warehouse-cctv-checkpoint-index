@@ -208,6 +208,9 @@ python -m unittest tests.test_api -v
 python -m unittest tests.test_logging_config -v
 python -m unittest tests.test_seed_site -v
 python -m unittest tests.test_check_time_sync -v
+python -m unittest tests.test_retention_cleanup -v
+python -m unittest tests.test_link_vehicle_plates -v
+python -m unittest tests.test_find_orphans -v
 </code></pre>
 <h2 id="2-ไฟล์เทสต์มีอะไรบ้าง">2. ไฟล์เทสต์มีอะไรบ้าง</h2>
 <div class="tw"><table>
@@ -259,9 +262,24 @@ python -m unittest tests.test_check_time_sync -v
 <td><code>scripts/check_time_sync.py</code> — parse ONVIF SOAP response (รวม prefix คนละแบบ), คำนวณ offset หัก round-trip, จัดรูปแบบรายงาน+เกณฑ์ผ่าน/ไม่ผ่าน, อ่าน device list จาก config</td>
 <td>ไม่ต้องมีอะไรเพิ่ม — <strong><code>query_onvif_time()</code> (ยิง HTTP จริง) ไม่มีเทสต์เลย</strong> ไม่มีอุปกรณ์ ONVIF จริงให้ทดสอบตอนเขียน ใช้ <code>--single &lt;ip&gt;</code> ทดสอบเองตอนมีอุปกรณ์จริง</td>
 </tr>
+<tr>
+<td><code>tests/test_retention_cleanup.py</code></td>
+<td><code>scripts/retention_cleanup.py</code> — ลบไฟล์ก่อนแถว DB, ข้ามแถวถ้าลบไฟล์ไม่สำเร็จ (กัน orphan), dry-run ไม่แตะทั้งไฟล์และ DB (mock session+store เพราะ Event/Detection มี JSONB)</td>
+<td>ไม่ต้องมีอะไรเพิ่ม</td>
+</tr>
+<tr>
+<td><code>tests/test_link_vehicle_plates.py</code></td>
+<td><code>scripts/link_vehicle_plates.py</code> — <code>match_vehicles_to_plates()</code> กฎ 1:1 ไม่กำกวม (ครบทุกเคส: กำกวมฝั่งรถ/ฝั่งป้าย, ขอบ window, camera_pairs ข้ามประตู), apply_matches (mock session)</td>
+<td>ไม่ต้องมีอะไรเพิ่ม</td>
+</tr>
+<tr>
+<td><code>tests/test_find_orphans.py</code></td>
+<td><code>scripts/find_orphans.py</code> — find_orphans() (set logic 2 ทิศ), scan_disk_keys() เดินไฟล์จริงใน temp dir ยืนยัน normalize เป็น '/' (Windows/Linux), format_report</td>
+<td>ไม่ต้องมีอะไรเพิ่ม</td>
+</tr>
 </tbody>
 </table></div>
-<p><strong>สถานะล่าสุด (เช็คก่อนอ้างอิง — ไฟล์อาจเปลี่ยนหลังจากนี้):</strong> รวม 174 เคส ผ่านหมด ใช้เวลา ~15-25 วินาที (ส่วนใหญ่หมดไปกับโหลดโมเดล PaddleOCR/OpenVINO ในกลุ่ม integration ครั้งแรก)</p>
+<p><strong>สถานะล่าสุด (เช็คก่อนอ้างอิง — ไฟล์อาจเปลี่ยนหลังจากนี้):</strong> รวม 211 เคส ผ่านหมด ใช้เวลา ~15-30 วินาที (ส่วนใหญ่หมดไปกับโหลดโมเดล PaddleOCR/OpenVINO ในกลุ่ม integration ครั้งแรก)</p>
 <h2 id="3-แต่ละไฟล์แบ่ง-2-กลุ่มเทสต์เสมอ-รูปแบบที่ใช้ซ้ำทุกโมดูล-ai">3. แต่ละไฟล์แบ่ง 2 กลุ่มเทสต์เสมอ (รูปแบบที่ใช้ซ้ำทุกโมดูล AI)</h2>
 <ol>
 <li><strong>หน่วยทดสอบเร็ว (mock ทั้งหมด)</strong> — ไม่โหลดโมเดลจริง รันได้ทุกเครื่องทุกครั้ง ทดสอบ logic ล้วน (การแปลง output โมเดล, การจัดกลุ่ม, การตัดสินใจ) ผ่าน fake object ที่ inject เข้าไปแทนโมเดล/session/client จริง</li>

@@ -210,6 +210,8 @@ html{ scroll-behavior:smooth; }
       <li><a href="#adr-021-ไม่ทำ-plate_detect-py-แยก-ใช้-text-detector-ของ-thai_ocr-py-ตรง-ๆ-ก่อน">ADR-021 — ไม่ทำ plate_detect.py แยก ใช้ text detector ของ thai_ocr.py ตรง ๆ ก่อน</a></li>
       <li><a href="#adr-022-search-api-เริ่มจากค้นหา-auth-แบบง่ายก่อน-ยังไม่ทำ-rbac-เต็มรูปแบบ">ADR-022 — Search API เริ่มจากค้นหา+auth แบบง่ายก่อน ยังไม่ทำ RBAC เต็มรูปแบบ</a></li>
       <li><a href="#adr-023-ตรวจสอบ-config-ก่อนขึ้นระบบจริงแบบ-static-ไม่มี-docker-ให้ทดสอบ">ADR-023 — ตรวจสอบ config ก่อนขึ้นระบบจริงแบบ static (ไม่มี Docker ให้ทดสอบ)</a></li>
+      <li><a href="#adr-024-จับคู่รถ-ป้าย-vehicles-plate_id-แบบ-pass-แยก-กฎ-1-1-ไม่กำกวม">ADR-024 — จับคู่รถ↔ป้าย (vehicles.plate_id) แบบ pass แยก + กฎ 1:1 ไม่กำกวม</a></li>
+      <li><a href="#adr-025-https-หน้าเว็บด้วย-self-signed-cert-nginx">ADR-025 — HTTPS หน้าเว็บด้วย self-signed cert (nginx)</a></li>
       <li><a href="#สิ่งที่ยังไม่ตัดสินใจ">★ สิ่งที่ยังไม่ตัดสินใจ</a></li>
       <li><a href="#บันทึกปัญหาจากหน้างาน">บันทึกปัญหาจากหน้างาน</a></li>
     </ol>
@@ -499,6 +501,41 @@ html{ scroll-behavior:smooth; }
 <li>ควรทำ pass แบบนี้ซ้ำทุกครั้งที่แก้ docker-compose.yml/frigate config/Dockerfile ก่อนขึ้นระบบจริง ไม่ใช่แค่ครั้งเดียว</li>
 <li>ยังมีความเสี่ยงแบบเดียวกัน (system library ที่ขาดใน Linux container) ที่ยังไม่ได้ตรวจละเอียดสำหรับ <code>paddlepaddle</code>/<code>paddleocr</code> — ยังไม่พบหลักฐานว่าเป็นปัญหา แต่ก็ยังไม่ได้ยืนยันว่าไม่ใช่ ต้องดู log ตอน <code>docker compose build indexer</code> ครั้งแรกจริง ๆ</li>
 <li><strong>รอบตรวจนี้ยังเจอว่า <code>scripts/check_time_sync.py</code> ที่ <code>08-nvr-integration.md</code> หัวข้อ 7 และ <code>09-multi-site-runbook.md</code> ขั้นที่ 6.2 อ้างถึงไม่มีไฟล์จริง</strong> (ทำเครื่องหมาย &quot;จะเขียนในเฟส 2&quot; ไว้ตั้งแต่แรก แต่ไม่เคยเขียน) — เขียนแล้ว (ONVIF <code>GetSystemDateAndTime</code>, ไม่ต้อง auth ตามสเปก) พร้อมโหมด <code>--single &lt;ip&gt;</code> ทดสอบทีละอุปกรณ์ตอนมีของจริง <strong>ยังไม่เคยทดสอบกับอุปกรณ์ ONVIF จริงเลย</strong> โครงสร้าง SOAP ตามสเปกมาตรฐานแต่กล้อง/NVR บางรุ่นอาจไม่ตรงเป๊ะ ต้อง verify ตอนมีเครื่องจริง — เพิ่มฟิลด์ <code>ip</code> เข้า <code>site_config.example.json</code>/<code>seed_site.py</code> schema ด้วย (คนละเรื่องกับ DB — cameras table ไม่มีคอลัมน์ ip เก็บไว้จริง)</li>
+</ul>
+<hr />
+<h2 id="adr-024-จับคู่รถ-ป้าย-vehicles-plate_id-แบบ-pass-แยก-กฎ-1-1-ไม่กำกวม">ADR-024 — จับคู่รถ↔ป้าย (vehicles.plate_id) แบบ pass แยก + กฎ 1:1 ไม่กำกวม</h2>
+<p><strong>วันที่:</strong> 2026-09-02 · <strong>สถานะ:</strong> ตัดสินใจแล้ว (ทดลอง — window ต้องปรับจากข้อมูลจริง)</p>
+<p><strong>บริบท:</strong> <code>vehicles.plate_id</code> (FK → plates) มีใน schema ตั้งแต่แรกแต่ไม่เคยมีโค้ดเซ็ตค่า — กล้อง overview (วิเคราะห์รถ) กับกล้อง lpr (อ่านป้าย) เห็นรถคันเดียวกันคนละ Frigate event (คนละแถว <code>events</code>) เวลาใกล้กันแต่ไม่ตรงเป๊ะและลำดับมาไม่แน่นอน ต้องมีขั้นตอนจับคู่ทีหลัง ไม่งั้น <code>/search/vehicles</code> โชว์ทะเบียนไม่ได้ (plate_norm เป็น NULL เสมอ)</p>
+<p><strong>การตัดสินใจ</strong></p>
+<ul>
+<li>ทำเป็น <strong>pass แยกรันเป็นระยะ (cron)</strong> — <code>scripts/link_vehicle_plates.py</code> — ไม่ใช่ inline ตอน <code>worker.py</code> ประมวลผล event เพราะตอนนั้นอีก event (overview หรือ lpr) อาจยังมาไม่ถึง</li>
+<li><strong>กฎจับคู่แบบระวังไว้ก่อน (conservative 1:1):</strong> จับคู่เฉพาะเมื่อไม่กำกวมทั้งสองฝั่ง — ในกรอบเวลา <code>window</code> (default 3 วิ) รถคันนั้นมีป้ายเข้าเกณฑ์ใบเดียว <strong>และ</strong> ป้ายใบนั้นมีรถเข้าเกณฑ์คันเดียว ถ้ามีหลายตัว (รถตามกันมาติด ๆ) = ปล่อย NULL ไม่เดา</li>
+<li>default = dry-run ต้อง <code>--execute</code> ถึงเขียนจริง</li>
+</ul>
+<p><strong>เหตุผล:</strong> สำหรับระบบช่วยค้นหา &quot;ค้นเจอทะเบียนผิดคัน&quot; แย่กว่า &quot;ไม่มีทะเบียน&quot; มาก — ทะเบียนผิดทำให้เจ้าหน้าที่ไปเปิด NVR ผิดจุด/สรุปผิดตัว ส่วนไม่มีทะเบียนก็แค่ใช้ตัวกรองอื่น (สี/ประเภท/เวลา) แทน กฎ 1:1 ยอมพลาดการจับคู่บางคู่ (recall ต่ำลง) เพื่อแลกกับความมั่นใจว่าคู่ที่จับได้ถูกจริง (precision สูง) — ตรงกับหลักการทั้งโปรเจกต์ (ดู ADR-021: ยอมพลาดดีกว่าเดาผิด)</p>
+<p><strong>ผลที่ตามมา</strong></p>
+<ul>
+<li><strong><code>window</code> 3 วินาที ยังไม่เคยพิสูจน์กับพฤติกรรมรถจริง</strong> — ระยะห่าง overview/lpr ขึ้นกับตำแหน่งกล้องจริงและความเร็วรถ ต้องวัดจากข้อมูลจริงหลังขึ้นระบบแล้วปรับ (สั้นไป = พลาดคู่ที่ควรจับ, ยาวไป = กำกวมบ่อยขึ้นจนจับไม่ได้เลย)</li>
+<li>ไซต์ประตูเดียว (เช่นนำร่อง WH01: overview+lpr อย่างละตัว) ใช้ default (ไม่ส่ง <code>camera_pairs</code>) ได้เลย — <strong>ไซต์หลายประตูต้องส่ง <code>camera_pairs</code></strong> ไม่งั้นรถประตู A อาจจับคู่ป้ายประตู B ที่บังเอิญเวลาใกล้กัน (โค้ดรองรับ param นี้แล้ว แต่ main() ยังไม่อ่านจาก config — ต้องต่อเมื่อมีไซต์หลายประตูจริง)</li>
+<li>ยังไม่เคยรันกับ Postgres จริง — ต้องตั้ง cron รายวันหลังขึ้นระบบ (ดู <code>07-operations.md</code>)</li>
+</ul>
+<hr />
+<h2 id="adr-025-https-หน้าเว็บด้วย-self-signed-cert-nginx">ADR-025 — HTTPS หน้าเว็บด้วย self-signed cert (nginx)</h2>
+<p><strong>วันที่:</strong> 2026-09-02 · <strong>สถานะ:</strong> ตัดสินใจแล้ว</p>
+<p><strong>บริบท:</strong> <code>06-pdpa-compliance.md</code> หัวข้อ 7 ระบุ &quot;เข้ารหัสการรับส่ง — HTTPS สำหรับหน้าเว็บ (self-signed ในวง LAN ก็ได้)&quot; หน้าเว็บเข้าถึง 2 ทาง: รปภ./เจ้าหน้าที่ในวง LAN (เข้าที่ IP เครื่อง) และเจ้าของรีโมตผ่าน Tailscale</p>
+<p><strong>ทางเลือกที่พิจารณา</strong></p>
+<ol>
+<li><strong>self-signed cert ใน nginx</strong> ← เลือก</li>
+<li>HTTP ใน LAN + พึ่ง Tailscale เข้ารหัสเฉพาะขารีโมต — ง่ายสุดแต่ในวง LAN เป็น plaintext ขัดกับ checklist HTTPS ในเอกสาร PDPA เอง</li>
+<li>Tailscale Serve (cert จริงจาก Let's Encrypt) — ไม่มี browser warning แต่ใช้ได้เฉพาะขา Tailscale ไม่ครอบคลุม LAN ในไซต์</li>
+</ol>
+<p><strong>เหตุผล:</strong> ตรงกับที่เอกสาร PDPA เขียนไว้พอดี ครอบคลุมทั้ง 2 ขา (LAN + Tailscale) ด้วย cert ใบเดียวที่ใส่ทั้ง IP และ Tailscale hostname เป็น SAN ไม่พึ่งอินเทอร์เน็ต/Let's Encrypt (บางไซต์อาจไม่มีเน็ต)</p>
+<p><strong>ผลที่ตามมา</strong></p>
+<ul>
+<li><code>scripts/gen_selfsigned_cert.sh</code> สร้าง cert (SAN = LAN IP + Tailscale hostname, อายุ 10 ปี) ต้องรันบนเครื่องเป้าหมายก่อน <code>docker compose --profile app up</code> — cert mount ผ่าน volume <code>${DATA_ROOT}/certs</code> ไม่ bake เข้า image (ความลับ + ต่างกันทุกไซต์)</li>
+<li><code>web/nginx.conf</code>: :80 redirect → :443, :443 เสิร์ฟด้วย cert; <code>.env</code> เพิ่ม <code>WEB_PORT</code> (https, default 8443) + <code>WEB_HTTP_PORT</code> (redirect, default 8080)</li>
+<li><strong>browser จะขึ้นคำเตือน &quot;ไม่ปลอดภัย&quot; ทุกครั้งที่เข้า</strong> (ปกติของ self-signed) — เจ้าหน้าที่ต้องกดผ่าน หรือติดตั้ง cert (<code>web.crt</code>) เป็น trusted ในเครื่องที่ใช้ประจำครั้งเดียว (แนะนำสำหรับ 2-3 เครื่องที่ใช้จริง) จดใน runbook แล้ว</li>
+<li><strong>ยังไม่เคยรันจริงกับ nginx/Docker</strong> (ไม่มี Docker บนเครื่องพัฒนา) — แต่ทดสอบ <code>gen_selfsigned_cert.sh</code> สร้าง cert จริงบนเครื่องพัฒนาแล้วว่า SAN/CN/อายุ ถูกต้อง (ผ่าน <code>MSYS_NO_PATHCONV=1</code> เพราะ Git Bash บน Windows แปลง path <code>/CN=</code> ผิด — บน Linux ไม่มีปัญหานี้)</li>
 </ul>
 <hr />
 <h2 id="สิ่งที่ยังไม่ตัดสินใจ"><span class="star">★</span> สิ่งที่ยังไม่ตัดสินใจ</h2>
