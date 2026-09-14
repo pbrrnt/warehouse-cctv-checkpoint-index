@@ -11,9 +11,14 @@
      RETENTION_EVENTS_DAYS
   3. AuditLog ที่เกิน RETENTION_AUDIT_LOG_DAYS (เก็บแยก 3 ปี ไม่ผูกกับ event)
 
-ทุกเฟสลบไฟล์ (thumb_key/crop_key) ผ่าน ContentStore **ก่อน** ลบแถว DB เสมอ —
-ถ้าลบไฟล์ไม่สำเร็จ ข้ามแถวนั้นไปก่อน (ไม่ลบ DB row แบบ orphan-ไฟล์-เหลือ)
-บันทึกจำนวนที่ลบลง audit_log ทุกครั้งที่รันจริง (ไม่ใช่ dry-run) ตามข้อกำหนด
+ทุกเฟสลบไฟล์ (thumb_key/crop_key) ผ่าน ContentStore **ก่อน** ลบแถว DB — แต่ถ้า
+ลบไฟล์บางไฟล์ไม่สำเร็จ (permission/IO) **ยังลบแถว DB ต่อ** เพราะ PDPA: metadata
+ต้องถูกลบเมื่อเกิน retention การเก็บแถวไว้เพราะไฟล์ลบไม่ได้ = เก็บข้อมูลเกินกำหนด
+ไฟล์ที่ค้างจะกลายเป็น orphan ให้ scripts/find_orphans.py เก็บกวาด (error ถูก
+log ไว้ให้ ops ตามแก้) — บันทึกสรุปลง audit_log ทุกครั้งที่รันจริง (ไม่ใช่ dry-run)
+
+ค่า retention อ่านจาก env (.env) RETENTION_EVENTS_DAYS / RETENTION_FACE_EMBEDDINGS_DAYS
+/ RETENTION_AUDIT_LOG_DAYS หรือ override ด้วย CLI flag (ลำดับ: flag > env > default)
 
 ★ ยังไม่เคยรันกับ Postgres จริง (ไม่มี Docker บนเครื่องพัฒนา) — ดู
 docs/11-testing.md
@@ -28,6 +33,7 @@ docs/11-testing.md
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -42,6 +48,19 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 DEFAULT_RETENTION_EVENTS_DAYS = 365
 DEFAULT_RETENTION_FACE_EMBEDDINGS_DAYS = 180
 DEFAULT_RETENTION_AUDIT_LOG_DAYS = 1095  # 3 ปี
+
+
+def _env_int(name: str, fallback: int) -> int:
+    """อ่านค่า int จาก env — ★ ต้องอ่านจาก .env จริง ไม่งั้นตั้ง retention ใน
+    .env ไปก็ไม่มีผล (ค่าใบหน้าโดยเฉพาะต้องตรงกับที่ฝ่ายกฎหมายอนุมัติ ตาม
+    docs/06-pdpa-compliance.md) ค่าที่ผิดรูป (ว่าง/ไม่ใช่ตัวเลข) ใช้ fallback"""
+    raw = os.environ.get(name)
+    if raw is None or not raw.strip():
+        return fallback
+    try:
+        return int(raw)
+    except ValueError:
+        return fallback
 
 
 @dataclass
@@ -80,7 +99,7 @@ def cleanup_expired_faces(session, store, cutoff: datetime, dry_run: bool, repor
     """เฟส 1 — Detection(kind='face') ที่ event เกิน cutoff (ลบก่อนเพราะ retention สั้นกว่า)"""
     from sqlalchemy import select
 
-    from services.common.db.models import Detection, DetectionKind, Event, FaceEmbedding
+    from services.common.db.models import Detection, DetectionKind, Event
 
     stmt = (
         select(Detection)
@@ -90,14 +109,16 @@ def cleanup_expired_faces(session, store, cutoff: datetime, dry_run: bool, repor
     detections = list(session.execute(stmt).scalars())
 
     for detection in detections:
-        if not _delete_file_if_present(store, detection.crop_key, report.errors, dry_run):
-            continue
-        if detection.crop_key:
+        if _delete_file_if_present(store, detection.crop_key, report.errors, dry_run) and detection.crop_key:
             report.face_files_deleted += 1
+        # ★ ลบแถวเสมอ แม้ลบ crop ไม่สำเร็จ — FaceEmbedding เป็นข้อมูลชีวมิติที่
+        # retention สั้นที่สุด การเก็บแถวไว้เพราะไฟล์ลบไม่ได้ = เก็บ biometric
+        # เกินกำหนด (แย่กว่าปล่อยไฟล์ค้างให้ find_orphans เก็บ) error ถูก log แล้ว
         if not dry_run:
-            # FaceEmbedding มี ondelete=CASCADE บน detection_id อยู่แล้ว แต่ query ตรง ๆ
-            # ก็ได้เพื่อความชัดเจนว่าตั้งใจลบคู่กัน
-            session.query(FaceEmbedding).filter(FaceEmbedding.detection_id == detection.id).delete()
+            # session.delete(detection) cascade ลบ FaceEmbedding ที่ผูกอยู่ให้เอง
+            # (relationship cascade="all, delete-orphan" + FK ondelete=CASCADE ใน
+            # models.py) — ไม่ต้อง bulk-delete FaceEmbedding เองก่อน (ซ้ำซ้อน และ
+            # bulk-delete-แล้ว-ORM-delete เป็นสูตรคลาสสิกของ StaleDataError)
             session.delete(detection)
         report.face_detections_deleted += 1
 
@@ -119,16 +140,16 @@ def cleanup_expired_events(session, store, cutoff: datetime, dry_run: bool, repo
         detection_stmt = select(Detection.crop_key).where(Detection.event_id == event.id)
         keys.extend(session.execute(detection_stmt).scalars())
 
-        all_files_ok = True
         for key in keys:
-            if not _delete_file_if_present(store, key, report.errors, dry_run):
-                all_files_ok = False
-            elif key:
+            if _delete_file_if_present(store, key, report.errors, dry_run) and key:
                 report.event_files_deleted += 1
 
-        if not all_files_ok:
-            continue  # ★ ไฟล์บางไฟล์ลบไม่ได้ — ข้าม event นี้ไปก่อน กันแถว DB หายแต่ไฟล์ค้าง
-
+        # ★ ลบแถว event เสมอ แม้ลบไฟล์บางไฟล์ไม่สำเร็จ — เพราะ (1) PDPA: metadata
+        # ต้องถูกลบเมื่อเกิน retention การเก็บแถวไว้เพราะไฟล์เดียวลบไม่ได้ = เก็บ
+        # ข้อมูลส่วนบุคคลเกินกำหนด แย่กว่า (2) ถ้าเก็บแถวไว้ ไฟล์ที่ลบสำเร็จไปแล้ว
+        # จะทำให้ event ชี้ไปหาไฟล์ที่หายไป (thumbnail เสีย) ไฟล์ที่ลบไม่ได้จะกลาย
+        # เป็น orphan ซึ่ง scripts/find_orphans.py จับ+เก็บกวาดให้ (error ถูก log
+        # ไว้ใน report.errors แล้วให้ ops ตามแก้)
         if not dry_run:
             session.delete(event)  # cascade ลบ detections/vehicles/plates/face_embeddings ที่เหลือ
         report.events_deleted += 1
@@ -139,11 +160,14 @@ def cleanup_expired_events(session, store, cutoff: datetime, dry_run: bool, repo
 
 def cleanup_expired_audit_logs(session, cutoff: datetime, dry_run: bool, report: CleanupReport) -> None:
     """เฟส 3 — audit_log เก็บ 3 ปี ไม่มีไฟล์ผูกด้วย"""
-    from sqlalchemy import delete, select
+    from sqlalchemy import delete, func, select
 
     from services.common.db.models import AuditLog
 
-    count = len(list(session.execute(select(AuditLog.id).where(AuditLog.ts < cutoff)).scalars()))
+    # นับด้วย COUNT(*) ที่ DB — ไม่ดึง id ทุกแถวเข้า memory มานับเอง
+    count = session.execute(
+        select(func.count()).select_from(AuditLog).where(AuditLog.ts < cutoff)
+    ).scalar_one()
     if not dry_run and count:
         session.execute(delete(AuditLog).where(AuditLog.ts < cutoff))
         session.commit()
@@ -188,9 +212,21 @@ def main() -> int:
     parser.add_argument("--database-url", required=True)
     parser.add_argument("--media-path", required=True, help="root ของ ContentStore เดียวกับที่ indexer ใช้ (MEDIA_PATH)")
     parser.add_argument("--execute", action="store_true", help="ลบจริง — ไม่ใส่ = dry-run เสมอ")
-    parser.add_argument("--retention-events-days", type=int, default=DEFAULT_RETENTION_EVENTS_DAYS)
-    parser.add_argument("--retention-face-days", type=int, default=DEFAULT_RETENTION_FACE_EMBEDDINGS_DAYS)
-    parser.add_argument("--retention-audit-log-days", type=int, default=DEFAULT_RETENTION_AUDIT_LOG_DAYS)
+    # ★ ลำดับความสำคัญ: CLI flag > env (.env) > default ในโค้ด — ต้องอ่าน .env
+    #   ด้วย ไม่งั้นตั้ง RETENTION_* ใน .env ไปก็ไม่มีผลต่อการลบจริง (ดู finding
+    #   จาก code review + docs/06-pdpa-compliance.md)
+    parser.add_argument(
+        "--retention-events-days", type=int,
+        default=_env_int("RETENTION_EVENTS_DAYS", DEFAULT_RETENTION_EVENTS_DAYS),
+    )
+    parser.add_argument(
+        "--retention-face-days", type=int,
+        default=_env_int("RETENTION_FACE_EMBEDDINGS_DAYS", DEFAULT_RETENTION_FACE_EMBEDDINGS_DAYS),
+    )
+    parser.add_argument(
+        "--retention-audit-log-days", type=int,
+        default=_env_int("RETENTION_AUDIT_LOG_DAYS", DEFAULT_RETENTION_AUDIT_LOG_DAYS),
+    )
     args = parser.parse_args()
 
     from sqlalchemy import create_engine

@@ -51,18 +51,9 @@ class _FakeScalars:
     def scalars(self):
         return list(self._rows)
 
-
-class _FakeQuery:
-    def __init__(self, recorder, model):
-        self._recorder = recorder
-        self._model = model
-
-    def filter(self, *a, **k):
-        return self
-
-    def delete(self):
-        self._recorder.append(("query_delete", self._model))
-        return 0
+    def scalar_one(self):
+        # ใช้กับ count query — ส่งค่าตัวแรกเป็นผล COUNT(*)
+        return self._rows[0] if self._rows else 0
 
 
 class _FakeSession:
@@ -74,7 +65,6 @@ class _FakeSession:
     def __init__(self, execute_returns):
         self._returns = list(execute_returns)
         self.deleted = []
-        self.query_calls = []
         self.committed = 0
         self.added = []
 
@@ -83,9 +73,6 @@ class _FakeSession:
 
     def delete(self, obj):
         self.deleted.append(obj)
-
-    def query(self, model):
-        return _FakeQuery(self.query_calls, model)
 
     def add(self, obj):
         self.added.append(obj)
@@ -118,8 +105,9 @@ class TestCleanupExpiredFaces(unittest.TestCase):
         self.assertEqual(report.face_detections_deleted, 1)
         self.assertEqual(report.face_files_deleted, 1)
 
-    def test_file_delete_failure_skips_row(self):
-        # ★ หัวใจของเทสต์นี้ — ลบไฟล์ไม่ได้ ต้องไม่ลบแถว DB
+    def test_file_delete_failure_still_deletes_row(self):
+        # ★ PDPA: ลบ crop ไม่ได้ ก็ยังต้องลบแถว (FaceEmbedding เป็นชีวมิติ ห้าม
+        # เก็บเกินกำหนดเพราะไฟล์เดียวลบไม่ได้) ไฟล์ค้างให้ find_orphans เก็บ
         det = _face_detection(crop_key="wh01/faces/broken.jpg")
         session = _FakeSession(execute_returns=[[det]])
         store = _FakeStore(fail_keys=["wh01/faces/broken.jpg"])
@@ -127,9 +115,10 @@ class TestCleanupExpiredFaces(unittest.TestCase):
 
         cleanup_expired_faces(session, store, CUTOFF, dry_run=False, report=report)
 
-        self.assertEqual(session.deleted, [])  # ★ ไม่ลบแถว
-        self.assertEqual(report.face_detections_deleted, 0)
-        self.assertEqual(len(report.errors), 1)
+        self.assertIn(det, session.deleted)  # ★ ลบแถวถึงแม้ไฟล์ลบไม่ได้
+        self.assertEqual(report.face_detections_deleted, 1)
+        self.assertEqual(report.face_files_deleted, 0)  # ไฟล์ลบไม่สำเร็จ ไม่นับ
+        self.assertEqual(len(report.errors), 1)  # แต่ log error ไว้
 
     def test_dry_run_does_not_delete_db(self):
         det = _face_detection()
@@ -174,7 +163,10 @@ class TestCleanupExpiredEvents(unittest.TestCase):
         self.assertEqual(report.events_deleted, 1)
         self.assertEqual(report.event_files_deleted, 2)
 
-    def test_partial_file_failure_skips_whole_event(self):
+    def test_partial_file_failure_still_deletes_event(self):
+        # ★ PDPA: ลบ crop นึงไม่ได้ ก็ยังต้องลบแถว event (ไม่งั้น metadata ค้าง
+        # เกิน retention + ไฟล์ที่ลบสำเร็จไปแล้วจะทำให้ event ชี้ไฟล์หาย) ไฟล์
+        # ที่ค้างกลายเป็น orphan ให้ find_orphans เก็บ — thumb (สำเร็จ) นับ 1
         event = _event()
         session = _FakeSession(execute_returns=[[event], ["wh01/crops/broken.jpg"]])
         store = _FakeStore(fail_keys=["wh01/crops/broken.jpg"])
@@ -182,15 +174,16 @@ class TestCleanupExpiredEvents(unittest.TestCase):
 
         cleanup_expired_events(session, store, CUTOFF, dry_run=False, report=report)
 
-        self.assertEqual(session.deleted, [])  # ★ event ไม่ถูกลบเพราะ crop ไฟล์นึงลบไม่ได้
-        self.assertEqual(report.events_deleted, 0)
+        self.assertIn(event, session.deleted)  # ★ event ถูกลบถึงแม้ crop ลบไม่ได้
+        self.assertEqual(report.events_deleted, 1)
+        self.assertEqual(report.event_files_deleted, 1)  # thumb ลบสำเร็จ, crop ไม่นับ
         self.assertEqual(len(report.errors), 1)
 
 
 class TestCleanupExpiredAuditLogs(unittest.TestCase):
     def test_counts_and_deletes(self):
-        # execute ครั้งแรก = select id (นับ), ครั้งสอง = delete statement (ไม่คืน scalars ที่ใช้)
-        session = _FakeSession(execute_returns=[[1, 2, 3], []])
+        # execute ครั้งแรก = COUNT(*) (scalar_one คืน 3), ครั้งสอง = delete statement
+        session = _FakeSession(execute_returns=[[3], []])
         report = CleanupReport()
 
         cleanup_expired_audit_logs(session, CUTOFF, dry_run=False, report=report)
@@ -199,7 +192,7 @@ class TestCleanupExpiredAuditLogs(unittest.TestCase):
         self.assertGreaterEqual(session.committed, 1)
 
     def test_dry_run_counts_but_does_not_delete(self):
-        session = _FakeSession(execute_returns=[[1, 2]])
+        session = _FakeSession(execute_returns=[[2]])  # COUNT(*) = 2
         report = CleanupReport()
 
         cleanup_expired_audit_logs(session, CUTOFF, dry_run=True, report=report)

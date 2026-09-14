@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import time
 from pathlib import Path
 
 for _stream in (sys.stdout, sys.stderr):
@@ -33,6 +34,8 @@ for _stream in (sys.stdout, sys.stderr):
         _stream.reconfigure(encoding="utf-8", errors="replace")
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+DEFAULT_MIN_AGE_HOURS = 1.0
 
 
 def find_orphans(disk_keys: set[str], db_keys: set[str]) -> tuple[set[str], set[str]]:
@@ -44,6 +47,35 @@ def find_orphans(disk_keys: set[str], db_keys: set[str]) -> tuple[set[str], set[
     orphan_files = disk_keys - db_keys
     missing_files = db_keys - disk_keys
     return orphan_files, missing_files
+
+
+def partition_deletable_orphans(
+    orphan_files: set[str],
+    media_path: str | Path,
+    min_age_seconds: float,
+    now: float | None = None,
+) -> tuple[set[str], set[str]]:
+    """
+    แยก orphan ออกเป็น (deletable, too_recent) ตามอายุไฟล์ (mtime)
+
+    ★ กัน TOCTOU: indexer เขียนไฟล์ก่อน commit แถว event เสมอ (ดู worker.py)
+    ถ้า find_orphans สแกนดิสก์เจอไฟล์สดที่ยัง commit แถวไม่ทัน จะเห็นเป็น orphan
+    ทั้งที่เป็นไฟล์ถูกต้อง — ห้ามลบ ไฟล์ที่เพิ่งแก้ไขภายใน min_age_seconds จึง
+    ถือว่า "ใหม่เกินตัดสิน" ไม่ลบ (แต่ยังรายงานได้) stat ไม่ได้ = เล่นให้ปลอดภัย
+    ไม่ลบ
+    """
+    now = time.time() if now is None else now
+    root = Path(media_path)
+    deletable: set[str] = set()
+    too_recent: set[str] = set()
+    for key in orphan_files:
+        try:
+            age = now - (root / key).stat().st_mtime
+        except OSError:
+            too_recent.add(key)  # stat ไม่ได้ (ไฟล์เพิ่งหาย/สิทธิ์) — ไม่เสี่ยงลบ
+            continue
+        (deletable if age >= min_age_seconds else too_recent).add(key)
+    return deletable, too_recent
 
 
 def scan_disk_keys(media_path: str | Path) -> set[str]:
@@ -105,6 +137,12 @@ def main() -> int:
         action="store_true",
         help="ลบไฟล์กำพร้าจริง (ค่าเริ่มต้น = รายงานอย่างเดียว ไม่ลบ)",
     )
+    parser.add_argument(
+        "--min-age-hours",
+        type=float,
+        default=DEFAULT_MIN_AGE_HOURS,
+        help="ไม่ลบไฟล์กำพร้าที่เพิ่งแก้ไขภายในกี่ชั่วโมง (กันลบไฟล์สดที่ยัง commit แถวไม่ทัน)",
+    )
     args = parser.parse_args()
 
     from sqlalchemy import create_engine
@@ -123,9 +161,14 @@ def main() -> int:
     orphan_files, missing_files = find_orphans(disk_keys, db_keys)
 
     deleted = None
+    skipped_recent = 0
     if args.delete_orphans:
         deleted = 0
-        for key in orphan_files:
+        deletable, too_recent = partition_deletable_orphans(
+            orphan_files, args.media_path, args.min_age_hours * 3600
+        )
+        skipped_recent = len(too_recent)
+        for key in deletable:
             try:
                 store.delete(key)
                 deleted += 1
@@ -133,6 +176,8 @@ def main() -> int:
                 print(f"[WARN] ลบ {key!r} ไม่สำเร็จ: {e}", file=sys.stderr)
 
     print(format_report(orphan_files, missing_files, deleted))
+    if skipped_recent:
+        print(f"ข้ามไฟล์กำพร้าที่ใหม่เกิน {args.min_age_hours} ชม. (ไม่ลบ กัน TOCTOU): {skipped_recent}")
     # exit code != 0 ถ้ามีไฟล์หาย (ปัญหาที่ต้องสนใจ) — ไฟล์กำพร้าเฉย ๆ ไม่ถือว่า fail
     return 1 if missing_files else 0
 
